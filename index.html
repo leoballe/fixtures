@@ -361,5 +361,35 @@
   </div>
 
   <script src="js/app.js"></script>
+
+    <!-- Modal: Mis torneos -->
+  <div id="tournaments-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-panel">
+      <header class="modal-header">
+        <h2>Mis torneos</h2>
+        <button id="btn-close-tournaments" class="btn ghost btn-sm">Cerrar</button>
+      </header>
+      <div class="modal-body">
+        <table class="data-table" id="tournaments-table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Categoría</th>
+              <th>Fechas</th>
+              <th>ID</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Se completa por JS -->
+          </tbody>
+        </table>
+        <p class="text-muted" id="tournaments-empty" style="display:none;">
+          No hay torneos guardados todavía en este navegador.
+        </p>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
