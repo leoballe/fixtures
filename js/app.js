@@ -1193,48 +1193,177 @@ function exportPreviewAsImage() {
 }
 
 function exportPreviewAsPdf() {
-  const container = document.getElementById("export-preview");
   const t = appState.currentTournament;
-  if (!container || !t) {
-    alert("No hay vista para exportar.");
+  if (!t || !t.matches || !t.matches.length) {
+    alert("No hay partidos para exportar.");
     return;
   }
-  if (
-    typeof html2canvas === "undefined" ||
-    typeof window.jspdf === "undefined"
-  ) {
+
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert("jsPDF no está disponible. Verificá la carga del script.");
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF("p", "mm", "a4");
+
+  // Verificamos que autoTable esté disponible
+  if (typeof doc.autoTable !== "function") {
     alert(
-      "La función de exportar PDF todavía no está disponible (bibliotecas no cargadas)."
+      "La función autoTable de jsPDF no está disponible. Verificá que el script 'jspdf-autotable' se haya cargado."
     );
     return;
   }
 
-  html2canvas(container, { scale: 2, backgroundColor: "#ffffff" }).then(
-    (canvas) => {
-      const imgData = canvas.toDataURL("image/png");
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
+  const mode = currentExportMode || "zone";
 
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+  // Mapas auxiliares
+  const teamById = {};
+  t.teams.forEach((team) => {
+    teamById[team.id] = team;
+  });
 
-      let heightLeft = imgHeight;
-      let position = 0;
+  const fieldById = {};
+  t.fields.forEach((f) => {
+    fieldById[f.id] = f;
+  });
 
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
+  // Agrupamos igual que en renderExportView
+  const grouped = {};
 
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
+  if (mode === "zone") {
+    t.matches.forEach((m) => {
+      const key = m.zone || "Sin zona";
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(m);
+    });
+  } else if (mode === "day") {
+    t.matches.forEach((m) => {
+      const key = m.date || "Sin fecha";
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(m);
+    });
+  } else if (mode === "field") {
+    t.matches.forEach((m) => {
+      const key = m.fieldId || "Sin cancha";
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(m);
+    });
+  } else if (mode === "team") {
+    t.teams.forEach((team) => {
+      grouped[team.id] = [];
+    });
+    t.matches.forEach((m) => {
+      if (!grouped[m.homeTeamId]) grouped[m.homeTeamId] = [];
+      if (!grouped[m.awayTeamId]) grouped[m.awayTeamId] = [];
+      grouped[m.homeTeamId].push(Object.assign({ role: "Local" }, m));
+      grouped[m.awayTeamId].push(Object.assign({ role: "Visitante" }, m));
+    });
+  }
 
-      const baseName = (t.name || "fixture").replace(/[^\w\-]+/g, "_");
-      pdf.save(baseName + ".pdf");
+  const keys = Object.keys(grouped).sort();
+  let firstGroup = true;
+
+  keys.forEach((key) => {
+    if (!firstGroup) {
+      doc.addPage();
     }
-  );
+    firstGroup = false;
+
+    // Título según modo
+    let headingText = "";
+    if (mode === "zone") {
+      headingText = "Zona " + key;
+    } else if (mode === "day") {
+      headingText = "Día " + key;
+    } else if (mode === "field") {
+      const field = fieldById[key];
+      headingText = "Cancha: " + (field ? field.name : key);
+    } else if (mode === "team") {
+      const team = teamById[key];
+      headingText = "Equipo: " + (team ? team.shortName : key);
+    }
+
+    doc.setFontSize(12);
+    doc.text(headingText, 14, 15);
+
+    // Cabeceras y filas
+    let head = [];
+    const body = [];
+
+    if (mode === "team") {
+      head = [[
+        "Fecha",
+        "Hora",
+        "Cancha",
+        "Rival",
+        "Rol",
+        "Zona",
+        "Fase / Ronda",
+      ]];
+
+      grouped[key].forEach((m) => {
+        const home = teamById[m.homeTeamId];
+        const away = teamById[m.awayTeamId];
+        const field = fieldById[m.fieldId];
+        const isHome = m.role === "Local";
+        const rival = isHome ? away : home;
+
+        body.push([
+          m.date || "",
+          m.time || "",
+          field ? field.name : (m.fieldId || ""),
+          rival ? rival.shortName : "",
+          m.role || "",
+          m.zone || "",
+          (m.phase || "") + " (R" + (m.round || "-") + ")",
+        ]);
+      });
+    } else {
+      head = [[
+        "Fecha",
+        "Hora",
+        "Cancha",
+        "Local",
+        "Visitante",
+        "Zona",
+        "Fase / Ronda",
+      ]];
+
+      grouped[key].forEach((m) => {
+        const home = teamById[m.homeTeamId];
+        const away = teamById[m.awayTeamId];
+        const field = fieldById[m.fieldId];
+
+        body.push([
+          m.date || "",
+          m.time || "",
+          field ? field.name : (m.fieldId || ""),
+          home ? home.shortName : "",
+          away ? away.shortName : "",
+          m.zone || "",
+          (m.phase || "") + " (R" + (m.round || "-") + ")",
+        ]);
+      });
+    }
+
+    // Dibujamos la tabla en el PDF
+    doc.autoTable({
+      startY: 22,
+      head: head,
+      body: body,
+      styles: {
+        fontSize: 8,
+      },
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: 255,
+      },
+      margin: { left: 10, right: 10 },
+    });
+  });
+
+  const baseName = (t.name || "fixture").replace(/[^\w\-]+/g, "_");
+  doc.save(baseName + ".pdf");
 }
+
