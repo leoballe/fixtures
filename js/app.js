@@ -682,6 +682,8 @@ document.addEventListener("DOMContentLoaded", () => {
   initFormatSection();
   initFixtureGeneration();
   initReportsAndExport();
+  initTournamentsModal(); // NUEVO
+
 });
 
 function startNewTournament() {
@@ -735,15 +737,9 @@ function initNavigation() {
 
   btnList &&
     btnList.addEventListener("click", () => {
-      const names = appState.tournaments
-        .map((t) => "• " + (t.name || "(sin nombre)") + " (" + t.id + ")")
-        .join("\n");
-      alert(
-        appState.tournaments.length
-          ? "Torneos guardados en este navegador:\n\n" + names
-          : "Todavía no hay torneos guardados en este navegador."
-      );
+      openTournamentsModal();
     });
+
 }
 
 // =====================
@@ -1821,4 +1817,142 @@ function exportPreviewAsPdf() {
 
   const baseName = (t.name || "fixture").replace(/[^\w\-]+/g, "_");
   doc.save(baseName + ".pdf");
+}
+// =====================
+//  MODAL: GESTIÓN DE TORNEOS
+// =====================
+
+function initTournamentsModal() {
+  const btnClose = document.getElementById("btn-close-tournaments");
+  const modal = document.getElementById("tournaments-modal");
+  const backdrop = modal ? modal.querySelector(".modal-backdrop") : null;
+
+  btnClose &&
+    btnClose.addEventListener("click", () => {
+      closeTournamentsModal();
+    });
+
+  backdrop &&
+    backdrop.addEventListener("click", () => {
+      closeTournamentsModal();
+    });
+}
+
+function openTournamentsModal() {
+  const modal = document.getElementById("tournaments-modal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  renderTournamentsTable();
+}
+
+function closeTournamentsModal() {
+  const modal = document.getElementById("tournaments-modal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+}
+
+function renderTournamentsTable() {
+  const tbody = document.querySelector("#tournaments-table tbody");
+  const empty = document.getElementById("tournaments-empty");
+  if (!tbody || !empty) return;
+
+  tbody.innerHTML = "";
+  const list = appState.tournaments || [];
+
+  if (!list.length) {
+    empty.style.display = "block";
+    return;
+  }
+  empty.style.display = "none";
+
+  list.forEach((tourn) => {
+    const tr = document.createElement("tr");
+    const dates =
+      (tourn.dateStart || "") +
+      (tourn.dateEnd ? " al " + tourn.dateEnd : "");
+    tr.innerHTML =
+      "<td>" +
+      (tourn.name || "(sin nombre)") +
+      "</td>" +
+      "<td>" +
+      (tourn.category || "") +
+      "</td>" +
+      "<td>" +
+      dates +
+      "</td>" +
+      "<td>" +
+      tourn.id +
+      "</td>" +
+      '<td class="actions">' +
+      '<button class="btn primary btn-sm" data-open="' +
+      tourn.id +
+      '">Abrir</button> ' +
+      '<button class="btn ghost btn-sm" data-duplicate="' +
+      tourn.id +
+      '">Duplicar</button> ' +
+      '<button class="btn ghost btn-sm" data-delete="' +
+      tourn.id +
+      '">Borrar</button>' +
+      "</td>";
+    tbody.appendChild(tr);
+  });
+
+  // Abrir torneo
+  tbody.querySelectorAll("[data-open]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-open");
+      const t = appState.tournaments.find((x) => x.id === id);
+      if (!t) return;
+      appState.currentTournament = t;
+      syncUIFromState_step1();
+      renderTeamsTable();
+      renderFieldsTable();
+      renderBreaksList();
+      renderFixtureResult();
+      renderExportView("zone");
+      closeTournamentsModal();
+    });
+  });
+
+  // Duplicar torneo
+  tbody.querySelectorAll("[data-duplicate]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-duplicate");
+      const original = appState.tournaments.find((x) => x.id === id);
+      if (!original) return;
+
+      const copy = JSON.parse(JSON.stringify(original));
+      copy.id = safeId("t");
+      copy.name = (original.name || "(sin nombre)") + " (copia)";
+      appState.tournaments.push(copy);
+      saveTournamentsToLocalStorage();
+      renderTournamentsTable();
+    });
+  });
+
+  // Borrar torneo
+  tbody.querySelectorAll("[data-delete]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-delete");
+      const original = appState.tournaments.find((x) => x.id === id);
+      if (!original) return;
+      const ok = confirm(
+        "¿Seguro que querés borrar el torneo:\n\n" +
+          (original.name || "(sin nombre)") +
+          " ?"
+      );
+      if (!ok) return;
+
+      appState.tournaments = appState.tournaments.filter(
+        (tourn) => tourn.id !== id
+      );
+      saveTournamentsToLocalStorage();
+
+      // Si borramos el que estaba abierto, arrancamos uno nuevo
+      if (appState.currentTournament && appState.currentTournament.id === id) {
+        startNewTournament();
+      }
+      renderTournamentsTable();
+    });
+  });
 }
