@@ -1,16 +1,21 @@
-// app.js v0.3
-// Generación de fixture (liga / zonas / eliminación) + scheduler básico
-// + vistas de reportes (zona / día / cancha / equipo) + exportar CSV / imagen / PDF.
-
-// =====================
-//  ESTADO GLOBAL
-// =====================
+// app.js v0.4
+// - Generación de fixture (liga / zonas / eliminación)
+// - Scheduler básico
+// - Vistas por zona / día / cancha / equipo
+// - Exportar CSV, PNG, PDF (texto con jsPDF + autoTable)
+// - NUEVO: Playoffs automáticos desde zonas (placeholders 1°/2° por zona)
 
 const appState = {
   currentTournament: null,
   tournaments: [],
 };
-let currentExportMode = "zone"; // zona, day, field, team
+
+// Modo de vista actual para exportar (zona/día/cancha/equipo)
+let currentExportMode = "zone";
+
+// =====================
+//  UTILIDADES BÁSICAS
+// =====================
 
 function safeId(prefix) {
   if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -123,7 +128,7 @@ function formatDate(date) {
 }
 
 // =====================
-//  ENGINE: ROUND ROBIN
+//  ENGINE: LIGA / ZONAS / ELIMINACIÓN
 // =====================
 
 function generarFixtureLiga(teamIds, options) {
@@ -131,9 +136,11 @@ function generarFixtureLiga(teamIds, options) {
   const idaVuelta = !!options.idaVuelta;
   const zone = options.zone || null;
   const phase = options.phase || "fase-liga";
+
   const equipos = teamIds.slice();
   if (equipos.length < 2) return [];
 
+  // Agregamos bye si es impar
   if (equipos.length % 2 === 1) {
     equipos.push(null);
   }
@@ -153,6 +160,8 @@ function generarFixtureLiga(teamIds, options) {
           zone: zone,
           homeTeamId: home,
           awayTeamId: away,
+          homeSeed: null,
+          awaySeed: null,
           date: null,
           time: null,
           fieldId: null,
@@ -173,6 +182,8 @@ function generarFixtureLiga(teamIds, options) {
       zone: m.zone,
       homeTeamId: m.awayTeamId,
       awayTeamId: m.homeTeamId,
+      homeSeed: null,
+      awaySeed: null,
       date: null,
       time: null,
       fieldId: null,
@@ -208,8 +219,10 @@ function generarLlavesEliminacion(teamIds, options) {
   const ids = teamIds.slice();
   if (ids.length < 2) return [];
   if (ids.length % 2 === 1) ids.push(null);
+
   const n = ids.length;
   const matches = [];
+
   for (let i = 0; i < n / 2; i++) {
     const home = ids[i];
     const away = ids[n - 1 - i];
@@ -219,6 +232,8 @@ function generarLlavesEliminacion(teamIds, options) {
       zone: null,
       homeTeamId: home,
       awayTeamId: away,
+      homeSeed: null,
+      awaySeed: null,
       date: null,
       time: null,
       fieldId: null,
@@ -226,6 +241,114 @@ function generarLlavesEliminacion(teamIds, options) {
       phase: type === "consolation" ? "playoff-consolation" : "playoff-main",
     });
   }
+
+  return matches;
+}
+
+// =====================
+//  NUEVO: PLAYOFFS DESDE ZONAS (PLACEHOLDERS 1°/2°)
+// =====================
+
+function generarPlayoffsDesdeZonas(t) {
+  const zonesSet = new Set();
+  t.teams.forEach((team) => {
+    const z = (team.zone || "").trim();
+    if (z) zonesSet.add(z);
+  });
+  const zones = Array.from(zonesSet);
+  zones.sort((a, b) =>
+    a.localeCompare(b, "es", { numeric: true, sensitivity: "base" })
+  );
+
+  const qualifiers =
+    (t.format &&
+      t.format.zonas &&
+      Number(t.format.zonas.qualifiersPerZone || 0)) ||
+    0;
+  const bestMode =
+    (t.format && t.format.zonas && t.format.zonas.bestPlacesMode) || "none";
+
+  if (!zones.length || qualifiers < 1) return [];
+
+  if (bestMode !== "none") {
+    console.warn(
+      "Mejores segundos/terceros todavía no están implementados: se generan solo cruces con clasificados directos."
+    );
+  }
+
+  const matches = [];
+
+  // Caso "clásico": 2 clasificados por zona, cantidad de zonas par, sin mejores terceros
+  if (
+    qualifiers === 2 &&
+    bestMode === "none" &&
+    zones.length >= 2 &&
+    zones.length % 2 === 0
+  ) {
+    for (let i = 0; i < zones.length; i += 2) {
+      const zA = zones[i];
+      const zB = zones[i + 1];
+
+      matches.push(
+        {
+          id: safeId("m"),
+          zone: null,
+          homeTeamId: null,
+          awayTeamId: null,
+          homeSeed: "1° " + zA,
+          awaySeed: "2° " + zB,
+          date: null,
+          time: null,
+          fieldId: null,
+          round: 1,
+          phase: "playoff-main",
+        },
+        {
+          id: safeId("m"),
+          zone: null,
+          homeTeamId: null,
+          awayTeamId: null,
+          homeSeed: "1° " + zB,
+          awaySeed: "2° " + zA,
+          date: null,
+          time: null,
+          fieldId: null,
+          round: 1,
+          phase: "playoff-main",
+        }
+      );
+    }
+  } else {
+    // Fallback genérico: se arman seeds pos1, pos2... por zona y se emparejan secuencialmente.
+    const seeds = [];
+    for (let pos = 1; pos <= qualifiers; pos++) {
+      zones.forEach((zoneName) => {
+        seeds.push({
+          label: pos + "° " + zoneName,
+        });
+      });
+    }
+
+    for (let i = 0; i < seeds.length; i += 2) {
+      const s1 = seeds[i];
+      const s2 = seeds[i + 1];
+      if (!s2) break;
+      matches.push({
+        id: safeId("m"),
+        zone: null,
+        homeTeamId: null,
+        awayTeamId: null,
+        homeSeed: s1.label,
+        awaySeed: s2.label,
+        date: null,
+        time: null,
+        fieldId: null,
+        round: 1,
+        phase: "playoff-main",
+      });
+    }
+  }
+
   return matches;
 }
 
@@ -235,6 +358,7 @@ function generarLlavesEliminacion(teamIds, options) {
 
 function asignarHorarios(matches, options) {
   if (!matches.length) return matches;
+
   const dateStartObj = dateStrToDate(options.dateStart);
   const dateEndObj = dateStrToDate(options.dateEnd);
   if (!dateStartObj || !dateEndObj || dateEndObj < dateStartObj) {
@@ -300,25 +424,34 @@ function asignarHorarios(matches, options) {
 
   const used = new Array(slots.length).fill(false);
   const lastEnd = {};
+
   const scheduled = matches.map((m) => {
     const home = m.homeTeamId;
     const away = m.awayTeamId;
     let chosen = -1;
+
     for (let i = 0; i < slots.length; i++) {
       if (used[i]) continue;
       const s = slots[i];
       const startAbs = s.absoluteStart;
       const endAbs = s.absoluteStart + dur;
-      const lastH = lastEnd[home] ?? -Infinity;
-      const lastA = lastEnd[away] ?? -Infinity;
-      if (startAbs - lastH < rest) continue;
-      if (startAbs - lastA < rest) continue;
+
+      if (home) {
+        const lastH = lastEnd[home] ?? -Infinity;
+        if (startAbs - lastH < rest) continue;
+      }
+      if (away) {
+        const lastA = lastEnd[away] ?? -Infinity;
+        if (startAbs - lastA < rest) continue;
+      }
+
       chosen = i;
-      lastEnd[home] = endAbs;
-      lastEnd[away] = endAbs;
+      if (home) lastEnd[home] = endAbs;
+      if (away) lastEnd[away] = endAbs;
       used[i] = true;
       break;
     }
+
     if (chosen === -1) {
       return Object.assign({}, m, { date: null, time: null, fieldId: null });
     } else {
@@ -364,6 +497,7 @@ function startNewTournament() {
 function initNavigation() {
   const stepItems = document.querySelectorAll(".step-item");
   const stepPanels = document.querySelectorAll(".step-panel");
+
   function showStep(n) {
     stepItems.forEach((li) =>
       li.classList.toggle("active", li.dataset.step === String(n))
@@ -372,9 +506,10 @@ function initNavigation() {
       panel.classList.toggle("active", panel.id === "step-" + n)
     );
     if (String(n) === "6") {
-      renderExportView("zone");
+      renderExportView(currentExportMode || "zone");
     }
   }
+
   stepItems.forEach((li) =>
     li.addEventListener("click", () => showStep(li.dataset.step))
   );
@@ -384,13 +519,16 @@ function initNavigation() {
   document.querySelectorAll("[data-prev-step]").forEach((btn) =>
     btn.addEventListener("click", () => showStep(btn.dataset.prevStep))
   );
+
   const btnNew = document.getElementById("btn-new-tournament");
   const btnList = document.getElementById("btn-tournament-list");
+
   btnNew &&
     btnNew.addEventListener("click", () => {
       startNewTournament();
       showStep(1);
     });
+
   btnList &&
     btnList.addEventListener("click", () => {
       const names = appState.tournaments
@@ -450,15 +588,18 @@ function initTeamsSection() {
     btnAddTeam.addEventListener("click", () => {
       const t = appState.currentTournament;
       if (!t) return;
+
       const shortName = document.getElementById("team-short").value.trim();
       const longName = document.getElementById("team-long").value.trim();
       const origin = document.getElementById("team-origin").value.trim();
       const category = document.getElementById("team-category").value.trim();
       const zone = document.getElementById("team-zone").value.trim();
+
       if (!shortName) {
         alert("Ingresá al menos el nombre corto del equipo.");
         return;
       }
+
       t.teams.push({
         id: safeId("team"),
         shortName: shortName,
@@ -467,6 +608,7 @@ function initTeamsSection() {
         category: category,
         zone: zone,
       });
+
       upsertCurrentTournament();
       renderTeamsTable();
       clearTeamInputs();
@@ -497,6 +639,7 @@ function renderTeamsTable() {
   tbody.innerHTML = "";
   const t = appState.currentTournament;
   if (!t) return;
+
   t.teams.forEach((team, index) => {
     const tr = document.createElement("tr");
     tr.innerHTML =
@@ -523,6 +666,7 @@ function renderTeamsTable() {
       '">✕</button></td>';
     tbody.appendChild(tr);
   });
+
   tbody.querySelectorAll("[data-remove-team]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-remove-team");
@@ -550,20 +694,25 @@ function importTeamsFromCsv(text) {
     alert("CSV vacío o sin encabezados.");
     return;
   }
+
   const header = lines[0].split(";").map((h) => h.trim().toLowerCase());
   const zoneIdx = header.findIndex((h) => h.includes("zona"));
   const teamIdx = header.findIndex((h) => h.includes("equipo"));
+
   if (teamIdx === -1) {
     alert("No se encontró columna 'equipo' en el CSV (stub).");
     return;
   }
+
   const t = appState.currentTournament;
   if (!t) return;
+
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(";");
     const shortName = (cols[teamIdx] || "").trim();
     if (!shortName) continue;
     const zone = zoneIdx !== -1 ? (cols[zoneIdx] || "").trim() : "";
+
     t.teams.push({
       id: safeId("team"),
       shortName: shortName,
@@ -573,6 +722,7 @@ function importTeamsFromCsv(text) {
       zone: zone,
     });
   }
+
   upsertCurrentTournament();
   renderTeamsTable();
   alert(
@@ -701,6 +851,7 @@ function renderFieldsTable() {
   tbody.innerHTML = "";
   const t = appState.currentTournament;
   if (!t) return;
+
   t.fields.forEach((field, index) => {
     const tr = document.createElement("tr");
     tr.innerHTML =
@@ -718,6 +869,7 @@ function renderFieldsTable() {
       '">✕</button></td>';
     tbody.appendChild(tr);
   });
+
   tbody.querySelectorAll("[data-remove-field]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-remove-field");
@@ -777,36 +929,8 @@ function initFixtureGeneration() {
         alert("Primero cargá equipos.");
         return;
       }
-      let matches = [];
-      if (t.format.type === "liga") {
-        const ids = t.teams.map((e) => e.id);
-        matches = generarFixtureLiga(ids, {
-          idaVuelta: t.format.liga.rounds === "ida-vuelta",
-        });
-      } else if (
-        t.format.type === "zonas" ||
-        t.format.type === "zonas-playoffs"
-      ) {
-        const zonesMap = {};
-        t.teams.forEach((team) => {
-          const key = team.zone || "Zona";
-          if (!zonesMap[key]) zonesMap[key] = [];
-          zonesMap[key].push(team.id);
-        });
-        matches = generarFixtureZonas(zonesMap, {
-          idaVuelta: t.format.liga.rounds === "ida-vuelta",
-        });
-        if (t.format.type === "zonas-playoffs") {
-          // A futuro: calcular clasificados y generar playoffs
-        }
-      } else if (t.format.type === "eliminacion") {
-        const ids = t.teams.map((e) => e.id);
-        matches = generarLlavesEliminacion(ids, {
-          type: t.format.eliminacion.type,
-        });
-      }
 
-      matches = asignarHorarios(matches, {
+      const scheduleOptions = {
         dateStart: t.dateStart,
         dateEnd: t.dateEnd,
         dayTimeMin: t.dayTimeMin,
@@ -816,7 +940,50 @@ function initFixtureGeneration() {
         fields: t.fields,
         breaks: t.breaks,
         restrictions: t.format.restrictions,
-      });
+      };
+
+      let matches = [];
+
+      if (t.format.type === "liga") {
+        const ids = t.teams.map((e) => e.id);
+        const base = generarFixtureLiga(ids, {
+          idaVuelta: t.format.liga.rounds === "ida-vuelta",
+        });
+        matches = asignarHorarios(base, scheduleOptions);
+      } else if (t.format.type === "zonas") {
+        const zonesMap = {};
+        t.teams.forEach((team) => {
+          const key = team.zone || "Zona";
+          if (!zonesMap[key]) zonesMap[key] = [];
+          zonesMap[key].push(team.id);
+        });
+        const base = generarFixtureZonas(zonesMap, {
+          idaVuelta: t.format.liga.rounds === "ida-vuelta",
+        });
+        matches = asignarHorarios(base, scheduleOptions);
+      } else if (t.format.type === "zonas-playoffs") {
+        const zonesMap = {};
+        t.teams.forEach((team) => {
+          const key = team.zone || "Zona";
+          if (!zonesMap[key]) zonesMap[key] = [];
+          zonesMap[key].push(team.id);
+        });
+
+        const baseZonas = generarFixtureZonas(zonesMap, {
+          idaVuelta: t.format.liga.rounds === "ida-vuelta",
+        });
+        const scheduledZonas = asignarHorarios(baseZonas, scheduleOptions);
+        const playoffs = generarPlayoffsDesdeZonas(t);
+
+        // Playoffs quedan sin programar (sin fecha/hora/cancha)
+        matches = scheduledZonas.concat(playoffs);
+      } else if (t.format.type === "eliminacion") {
+        const ids = t.teams.map((e) => e.id);
+        const base = generarLlavesEliminacion(ids, {
+          type: t.format.eliminacion.type,
+        });
+        matches = asignarHorarios(base, scheduleOptions);
+      }
 
       t.matches = matches;
       upsertCurrentTournament();
@@ -831,6 +998,7 @@ function renderFixtureResult() {
   const t = appState.currentTournament;
   if (!t) return;
   container.innerHTML = "";
+
   if (!t.matches || !t.matches.length) {
     container.textContent = "Todavía no hay partidos generados.";
     return;
@@ -841,8 +1009,14 @@ function renderFixtureResult() {
     teamById[team.id] = team;
   });
 
+  const fieldById = {};
+  t.fields.forEach((f) => {
+    fieldById[f.id] = f;
+  });
+
   const table = document.createElement("table");
   table.className = "fixture-table";
+
   const thead = document.createElement("thead");
   thead.innerHTML =
     "<tr>" +
@@ -850,16 +1024,24 @@ function renderFixtureResult() {
     "<th>Zona</th>" +
     "<th>Fecha</th>" +
     "<th>Hora</th>" +
-    "<th>Cancha (id)</th>" +
+    "<th>Cancha</th>" +
     "<th>Partido</th>" +
     "<th>Fase / Ronda</th>" +
     "</tr>";
   table.appendChild(thead);
+
   const tbody = document.createElement("tbody");
 
   t.matches.forEach((m, idx) => {
-    const home = teamById[m.homeTeamId];
-    const away = teamById[m.awayTeamId];
+    const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
+    const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
+
+    const homeLabel = home ? home.shortName : m.homeSeed || "?";
+    const awayLabel = away ? away.shortName : m.awaySeed || "?";
+
+    const field =
+      m.fieldId && fieldById[m.fieldId] ? fieldById[m.fieldId].name : m.fieldId;
+
     const tr = document.createElement("tr");
     tr.innerHTML =
       "<td>" +
@@ -875,12 +1057,12 @@ function renderFixtureResult() {
       (m.time || "-") +
       "</td>" +
       "<td>" +
-      (m.fieldId || "-") +
+      (field || "-") +
       "</td>" +
       "<td>" +
-      (home ? home.shortName : "?") +
+      homeLabel +
       " vs " +
-      (away ? away.shortName : "?") +
+      awayLabel +
       "</td>" +
       "<td>" +
       (m.phase || "") +
@@ -909,7 +1091,8 @@ function initReportsAndExport() {
 
   btnZone && btnZone.addEventListener("click", () => renderExportView("zone"));
   btnDay && btnDay.addEventListener("click", () => renderExportView("day"));
-  btnField && btnField.addEventListener("click", () => renderExportView("field"));
+  btnField &&
+    btnField.addEventListener("click", () => renderExportView("field"));
   btnTeam && btnTeam.addEventListener("click", () => renderExportView("team"));
 
   btnCsv && btnCsv.addEventListener("click", exportMatchesAsCsv);
@@ -921,6 +1104,7 @@ function initReportsAndExport() {
 
 function renderExportView(mode) {
   currentExportMode = mode; // guardamos qué vista está activa
+
   const container = document.getElementById("export-preview");
   if (!container) return;
   const t = appState.currentTournament;
@@ -961,14 +1145,16 @@ function renderExportView(mode) {
       grouped[key].push(m);
     });
   } else if (mode === "team") {
-    t.teams.forEach((team) => {
-      grouped[team.id] = [];
-    });
+    // Agrupamos por equipo real (ignorando placeholders)
     t.matches.forEach((m) => {
-      if (!grouped[m.homeTeamId]) grouped[m.homeTeamId] = [];
-      if (!grouped[m.awayTeamId]) grouped[m.awayTeamId] = [];
-      grouped[m.homeTeamId].push(Object.assign({ role: "Local" }, m));
-      grouped[m.awayTeamId].push(Object.assign({ role: "Visitante" }, m));
+      if (m.homeTeamId) {
+        if (!grouped[m.homeTeamId]) grouped[m.homeTeamId] = [];
+        grouped[m.homeTeamId].push(Object.assign({ role: "Local" }, m));
+      }
+      if (m.awayTeamId) {
+        if (!grouped[m.awayTeamId]) grouped[m.awayTeamId] = [];
+        grouped[m.awayTeamId].push(Object.assign({ role: "Visitante" }, m));
+      }
     });
   }
 
@@ -991,9 +1177,11 @@ function renderExportView(mode) {
     block.style.marginBottom = "1rem";
 
     let headingText = "";
-    if (mode === "zone") headingText = "Zona " + key;
-    else if (mode === "day") headingText = "Día " + key;
-    else if (mode === "field") {
+    if (mode === "zone") {
+      headingText = "Zona " + key;
+    } else if (mode === "day") {
+      headingText = "Día " + key;
+    } else if (mode === "field") {
       const field = fieldById[key];
       headingText = "Cancha: " + (field ? field.name : key);
     } else if (mode === "team") {
@@ -1034,15 +1222,23 @@ function renderExportView(mode) {
     table.appendChild(thead);
 
     const tbody = document.createElement("tbody");
+
     grouped[key].forEach((m) => {
-      const home = teamById[m.homeTeamId];
-      const away = teamById[m.awayTeamId];
-      const field = fieldById[m.fieldId];
+      const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
+      const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
+      const homeLabel = home ? home.shortName : m.homeSeed || "?";
+      const awayLabel = away ? away.shortName : m.awaySeed || "?";
+      const field =
+        m.fieldId && fieldById[m.fieldId]
+          ? fieldById[m.fieldId].name
+          : m.fieldId || "-";
+
       const tr = document.createElement("tr");
 
       if (mode === "team") {
         const isHome = m.role === "Local";
-        const rival = isHome ? away : home;
+        const rivalLabel = isHome ? awayLabel : homeLabel;
+
         tr.innerHTML =
           "<td>" +
           (m.date || "-") +
@@ -1051,10 +1247,10 @@ function renderExportView(mode) {
           (m.time || "-") +
           "</td>" +
           "<td>" +
-          (field ? field.name : m.fieldId || "-") +
+          field +
           "</td>" +
           "<td>" +
-          (rival ? rival.shortName : "?") +
+          rivalLabel +
           "</td>" +
           "<td>" +
           (m.role || "") +
@@ -1076,12 +1272,12 @@ function renderExportView(mode) {
           (m.time || "-") +
           "</td>" +
           "<td>" +
-          (field ? field.name : m.fieldId || "-") +
+          field +
           "</td>" +
           "<td>" +
-          (home ? home.shortName : "?") +
+          homeLabel +
           " vs " +
-          (away ? away.shortName : "?") +
+          awayLabel +
           "</td>" +
           "<td>" +
           (m.zone || "-") +
@@ -1092,6 +1288,7 @@ function renderExportView(mode) {
           (m.round || "-") +
           ")</td>";
       }
+
       tbody.appendChild(tr);
     });
 
@@ -1134,18 +1331,24 @@ function exportMatchesAsCsv() {
   );
 
   t.matches.forEach((m, idx) => {
-    const home = teamById[m.homeTeamId];
-    const away = teamById[m.awayTeamId];
-    const field = fieldById[m.fieldId];
+    const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
+    const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
+    const homeLabel = home ? home.shortName : m.homeSeed || "";
+    const awayLabel = away ? away.shortName : m.awaySeed || "";
+    const field =
+      m.fieldId && fieldById[m.fieldId]
+        ? fieldById[m.fieldId].name
+        : m.fieldId || "";
+
     rows.push(
       [
         String(idx + 1),
         m.zone || "",
         m.date || "",
         m.time || "",
-        field ? field.name : m.fieldId || "",
-        home ? home.shortName : "",
-        away ? away.shortName : "",
+        field,
+        homeLabel,
+        awayLabel,
         m.phase || "",
         String(m.round || ""),
       ].join(";")
@@ -1179,19 +1382,22 @@ function exportPreviewAsImage() {
     return;
   }
 
-  html2canvas(container, { scale: 2, backgroundColor: "#020617" }).then(
-    (canvas) => {
-      const link = document.createElement("a");
-      link.href = canvas.toDataURL("image/png");
-      const baseName = (t.name || "fixture").replace(/[^\w\-]+/g, "_");
-      link.download = baseName + ".png";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  );
+  html2canvas(container, {
+    scale: 1.5,
+    backgroundColor: "#020617",
+  }).then((canvas) => {
+    const imgData = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    const baseName = (t.name || "fixture").replace(/[^\w\-]+/g, "_");
+    link.href = imgData;
+    link.download = baseName + ".png";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
 }
 
+// PDF con texto usando jsPDF + autoTable
 function exportPreviewAsPdf() {
   const t = appState.currentTournament;
   if (!t || !t.matches || !t.matches.length) {
@@ -1207,7 +1413,6 @@ function exportPreviewAsPdf() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF("p", "mm", "a4");
 
-  // Verificamos que autoTable esté disponible
   if (typeof doc.autoTable !== "function") {
     alert(
       "La función autoTable de jsPDF no está disponible. Verificá que el script 'jspdf-autotable' se haya cargado."
@@ -1217,7 +1422,6 @@ function exportPreviewAsPdf() {
 
   const mode = currentExportMode || "zone";
 
-  // Mapas auxiliares
   const teamById = {};
   t.teams.forEach((team) => {
     teamById[team.id] = team;
@@ -1228,7 +1432,6 @@ function exportPreviewAsPdf() {
     fieldById[f.id] = f;
   });
 
-  // Agrupamos igual que en renderExportView
   const grouped = {};
 
   if (mode === "zone") {
@@ -1250,14 +1453,15 @@ function exportPreviewAsPdf() {
       grouped[key].push(m);
     });
   } else if (mode === "team") {
-    t.teams.forEach((team) => {
-      grouped[team.id] = [];
-    });
     t.matches.forEach((m) => {
-      if (!grouped[m.homeTeamId]) grouped[m.homeTeamId] = [];
-      if (!grouped[m.awayTeamId]) grouped[m.awayTeamId] = [];
-      grouped[m.homeTeamId].push(Object.assign({ role: "Local" }, m));
-      grouped[m.awayTeamId].push(Object.assign({ role: "Visitante" }, m));
+      if (m.homeTeamId) {
+        if (!grouped[m.homeTeamId]) grouped[m.homeTeamId] = [];
+        grouped[m.homeTeamId].push(Object.assign({ role: "Local" }, m));
+      }
+      if (m.awayTeamId) {
+        if (!grouped[m.awayTeamId]) grouped[m.awayTeamId] = [];
+        grouped[m.awayTeamId].push(Object.assign({ role: "Visitante" }, m));
+      }
     });
   }
 
@@ -1270,7 +1474,6 @@ function exportPreviewAsPdf() {
     }
     firstGroup = false;
 
-    // Título según modo
     let headingText = "";
     if (mode === "zone") {
       headingText = "Zona " + key;
@@ -1287,67 +1490,71 @@ function exportPreviewAsPdf() {
     doc.setFontSize(12);
     doc.text(headingText, 14, 15);
 
-    // Cabeceras y filas
     let head = [];
     const body = [];
 
     if (mode === "team") {
-      head = [[
-        "Fecha",
-        "Hora",
-        "Cancha",
-        "Rival",
-        "Rol",
-        "Zona",
-        "Fase / Ronda",
-      ]];
+      head = [
+        ["Fecha", "Hora", "Cancha", "Rival", "Rol", "Zona", "Fase / Ronda"],
+      ];
 
       grouped[key].forEach((m) => {
-        const home = teamById[m.homeTeamId];
-        const away = teamById[m.awayTeamId];
-        const field = fieldById[m.fieldId];
+        const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
+        const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
+        const homeLabel = home ? home.shortName : m.homeSeed || "?";
+        const awayLabel = away ? away.shortName : m.awaySeed || "?";
+        const field =
+          m.fieldId && fieldById[m.fieldId]
+            ? fieldById[m.fieldId].name
+            : m.fieldId || "";
         const isHome = m.role === "Local";
-        const rival = isHome ? away : home;
+        const rivalLabel = isHome ? awayLabel : homeLabel;
 
         body.push([
           m.date || "",
           m.time || "",
-          field ? field.name : (m.fieldId || ""),
-          rival ? rival.shortName : "",
+          field,
+          rivalLabel,
           m.role || "",
           m.zone || "",
           (m.phase || "") + " (R" + (m.round || "-") + ")",
         ]);
       });
     } else {
-      head = [[
-        "Fecha",
-        "Hora",
-        "Cancha",
-        "Local",
-        "Visitante",
-        "Zona",
-        "Fase / Ronda",
-      ]];
+      head = [
+        [
+          "Fecha",
+          "Hora",
+          "Cancha",
+          "Local",
+          "Visitante",
+          "Zona",
+          "Fase / Ronda",
+        ],
+      ];
 
       grouped[key].forEach((m) => {
-        const home = teamById[m.homeTeamId];
-        const away = teamById[m.awayTeamId];
-        const field = fieldById[m.fieldId];
+        const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
+        const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
+        const homeLabel = home ? home.shortName : m.homeSeed || "";
+        const awayLabel = away ? away.shortName : m.awaySeed || "";
+        const field =
+          m.fieldId && fieldById[m.fieldId]
+            ? fieldById[m.fieldId].name
+            : m.fieldId || "";
 
         body.push([
           m.date || "",
           m.time || "",
-          field ? field.name : (m.fieldId || ""),
-          home ? home.shortName : "",
-          away ? away.shortName : "",
+          field,
+          homeLabel,
+          awayLabel,
           m.zone || "",
           (m.phase || "") + " (R" + (m.round || "-") + ")",
         ]);
       });
     }
 
-    // Dibujamos la tabla en el PDF
     doc.autoTable({
       startY: 22,
       head: head,
@@ -1366,4 +1573,3 @@ function exportPreviewAsPdf() {
   const baseName = (t.name || "fixture").replace(/[^\w\-]+/g, "_");
   doc.save(baseName + ".pdf");
 }
-
