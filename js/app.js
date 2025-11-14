@@ -614,6 +614,58 @@ function asignarHorarios(matches, options) {
 
   return scheduled;
 }
+// =====================
+//  RENUMERAR PARTIDOS CON IDs NUMÉRICOS
+// =====================
+
+function renumerarPartidosConIdsNumericos(matches) {
+  const codeMap = {};
+
+  // 1) Asignar nuevo código numérico a TODOS los partidos
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    const newCode = String(i + 1); // "1", "2", "3", ...
+    const oldCode = m.code || null;
+
+    if (oldCode) {
+      codeMap[oldCode] = newCode; // P1 -> 5, etc.
+    }
+    m.code = newCode;
+  }
+
+  // 2) Actualizar referencias GP/PP y from*MatchCode que usaban los códigos viejos
+  matches.forEach((m) => {
+    if (m.homeSeed) {
+      m.homeSeed = reemplazarCodigoEnSeed(m.homeSeed, codeMap);
+    }
+    if (m.awaySeed) {
+      m.awaySeed = reemplazarCodigoEnSeed(m.awaySeed, codeMap);
+    }
+
+    if (m.fromHomeMatchCode && codeMap[m.fromHomeMatchCode]) {
+      m.fromHomeMatchCode = codeMap[m.fromHomeMatchCode];
+    }
+    if (m.fromAwayMatchCode && codeMap[m.fromAwayMatchCode]) {
+      m.fromAwayMatchCode = codeMap[m.fromAwayMatchCode];
+    }
+  });
+
+  return matches;
+}
+
+function reemplazarCodigoEnSeed(seedLabel, codeMap) {
+  // Solo tocamos cosas tipo "GP P1", "PP P3", etc.
+  const parts = seedLabel.split(" ");
+  if (
+    parts.length === 2 &&
+    (parts[0] === "GP" || parts[0] === "PP")
+  ) {
+    const oldCode = parts[1];
+    const newCode = codeMap[oldCode] || oldCode;
+    return parts[0] + " " + newCode;
+  }
+  return seedLabel; // "1° A", "2° B", etc. se dejan igual
+}
 
 // =====================
 //  INICIALIZACIÓN GENERAL
@@ -1132,7 +1184,10 @@ function initFixtureGeneration() {
           type: t.format.eliminacion.type,
         });
       }
+      // Renumeramos TODOS los partidos con IDs numéricos globales (1, 2, 3, ...)
+      matchesBase = renumerarPartidosConIdsNumericos(matchesBase);
 
+      // Luego asignamos fechas/horarios/canchas
       const matches = asignarHorarios(matchesBase, scheduleOptions);
       t.matches = matches;
       upsertCurrentTournament();
