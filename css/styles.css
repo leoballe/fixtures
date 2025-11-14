@@ -366,6 +366,25 @@ input::placeholder {
   background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), #020617);
   border: 1px solid var(--border-subtle);
   min-height: 120px;
+  overflow-x: auto;
+}
+
+.fixture-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.fixture-table th,
+.fixture-table td {
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid rgba(31, 41, 55, 0.7);
+  text-align: left;
+}
+
+.fixture-table th {
+  font-weight: 500;
+  color: var(--muted);
 }
 
 /* Responsivo */
