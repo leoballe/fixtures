@@ -10,6 +10,7 @@ const appState = {
   currentTournament: null,
   tournaments: [],
 };
+let currentExportMode = "zone"; // zona, day, field, team
 
 function safeId(prefix) {
   if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -919,6 +920,7 @@ function initReportsAndExport() {
 }
 
 function renderExportView(mode) {
+  currentExportMode = mode; // guardamos qué vista está activa
   const container = document.getElementById("export-preview");
   if (!container) return;
   const t = appState.currentTournament;
