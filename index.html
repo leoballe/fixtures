@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fixture Planner</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-title">Fixture Planner</span>
+        <span class="brand-subtitle">v0.1 · Beta</span>
+      </div>
+      <nav class="app-nav">
+        <button id="btn-new-tournament" class="btn primary">Nuevo torneo</button>
+        <button id="btn-tournament-list" class="btn ghost">Mis torneos</button>
+      </nav>
+    </header>
+
+    <main class="app-main">
+      <aside class="sidebar">
+        <ol class="steps">
+          <li class="step-item active" data-step="1">1. Datos del torneo</li>
+          <li class="step-item" data-step="2">2. Equipos y zonas</li>
+          <li class="step-item" data-step="3">3. Formato</li>
+          <li class="step-item" data-step="4">4. Fechas y canchas</li>
+          <li class="step-item" data-step="5">5. Generar fixture</li>
+          <li class="step-item" data-step="6">6. Reportes / exportar</li>
+        </ol>
+      </aside>
+
+      <section class="content">
+
+        <!-- STEP 1: DATOS GENERALES -->
+        <section id="step-1" class="step-panel active">
+          <h2>1. Datos generales del torneo</h2>
+          <div class="form-grid">
+            <label>
+              Nombre del torneo
+              <input type="text" id="t-name" placeholder="Ej: Evita 2026 – Fútbol Sub14 – Masc." />
+            </label>
+
+            <label>
+              Categoría
+              <input type="text" id="t-category" placeholder="Ej: Sub14 Masculino" />
+            </label>
+
+            <label>
+              Rango de fechas
+              <div class="inline">
+                <input type="date" id="t-date-start" />
+                <span>hasta</span>
+                <input type="date" id="t-date-end" />
+              </div>
+            </label>
+
+            <label>
+              Tipo de almacenamiento
+              <select id="t-storage-mode">
+                <option value="local">Navegador (LocalStorage)</option>
+                <option value="cloud">Nube (Firebase)</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="panel-footer">
+            <button class="btn primary" data-next-step="2">Continuar</button>
+          </div>
+        </section>
+
+        <!-- STEP 2: EQUIPOS Y ZONAS -->
+        <section id="step-2" class="step-panel">
+          <h2>2. Equipos y zonas</h2>
+
+          <div class="panel-row">
+            <div class="panel-col">
+              <h3>Equipos</h3>
+              <div class="form-grid">
+                <label>
+                  Nombre corto
+                  <input type="text" id="team-short" placeholder="Ej: CABA" />
+                </label>
+                <label>
+                  Nombre largo
+                  <input type="text" id="team-long" placeholder="Ej: Ciudad Autónoma de Buenos Aires" />
+                </label>
+                <label>
+                  Procedencia (provincia / ciudad / club)
+                  <input type="text" id="team-origin" placeholder="Ej: CABA / Club X" />
+                </label>
+                <label>
+                  Categoría
+                  <input type="text" id="team-category" placeholder="Ej: Sub14 Masculino" />
+                </label>
+                <label>
+                  Zona
+                  <input type="text" id="team-zone" placeholder="Ej: A, B, C..." />
+                </label>
+              </div>
+              <div class="panel-footer">
+                <button id="btn-add-team" class="btn primary">Agregar equipo</button>
+                <button id="btn-import-csv" class="btn ghost">Importar CSV desde sorteador</button>
+                <input type="file" id="teams-csv-input" accept=".csv" hidden />
+              </div>
+            </div>
+
+            <div class="panel-col">
+              <h3>Listado de equipos (torneo actual)</h3>
+              <table class="data-table" id="teams-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Zona</th>
+                    <th>Nombre corto</th>
+                    <th>Nombre largo</th>
+                    <th>Procedencia</th>
+                    <th>Categoría</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Filas generadas por JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel-footer">
+            <button class="btn ghost" data-prev-step="1">Volver</button>
+            <button class="btn primary" data-next-step="3">Continuar</button>
+          </div>
+        </section>
+
+        <!-- STEP 3: FORMATO -->
+        <section id="step-3" class="step-panel">
+          <h2>3. Formato de competencia</h2>
+
+          <div class="form-grid">
+            <label>
+              Tipo de formato
+              <select id="t-format-type">
+                <option value="liga">Liga / todos contra todos</option>
+                <option value="zonas">Zonas (grupos)</option>
+                <option value="zonas-playoffs">Zonas + playoffs</option>
+                <option value="eliminacion">Solo llaves de eliminación</option>
+              </select>
+            </label>
+
+            <div id="format-liga-options" class="subpanel">
+              <h3>Liga</h3>
+              <label>
+                Rondas
+                <select id="liga-rounds">
+                  <option value="ida">Solo ida</option>
+                  <option value="ida-vuelta">Ida y vuelta</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="format-zonas-options" class="subpanel">
+              <h3>Zonas</h3>
+              <label>
+                Clasificados por zona
+                <input type="number" id="zonas-qualifiers" min="1" value="2" />
+              </label>
+              <label>
+                ¿Incluir mejores terceros / segundos?
+                <select id="zonas-best-places">
+                  <option value="none">No</option>
+                  <option value="best-seconds">Mejores segundos</option>
+                  <option value="best-thirds">Mejores terceros</option>
+                  <option value="best-second-third">Mejores 2° y 3°</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="format-elim-options" class="subpanel">
+              <h3>Eliminación directa</h3>
+              <label>
+                Opciones de cuadro
+                <select id="elim-type">
+                  <option value="simple">Solo cuadro principal</option>
+                  <option value="third-place">Cuadro + 3er puesto</option>
+                  <option value="consolation">Cuadro + llaves de perdedores</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="format-restrictions" class="subpanel">
+              <h3>Restricciones</h3>
+              <label class="checkbox">
+                <input type="checkbox" id="avoid-same-province" />
+                Evitar cruces de equipos de la misma provincia en primera fase
+              </label>
+              <label class="checkbox">
+                <input type="checkbox" id="avoid-same-club" />
+                Evitar cruces de equipos del mismo club en primera fase
+              </label>
+              <label class="checkbox">
+                <input type="checkbox" id="avoid-first-slot-streak" checked />
+                Evitar que un equipo juegue el primer turno 3 días seguidos
+              </label>
+              <label class="checkbox">
+                <input type="checkbox" id="avoid-last-slot-streak" checked />
+                Evitar que un equipo juegue el último turno 3 días seguidos
+              </label>
+            </div>
+          </div>
+
+          <div class="panel-footer">
+            <button class="btn ghost" data-prev-step="2">Volver</button>
+            <button class="btn primary" data-next-step="4">Continuar</button>
+          </div>
+        </section>
+
+        <!-- STEP 4: FECHAS Y CANCHAS -->
+        <section id="step-4" class="step-panel">
+          <h2>4. Fechas, horarios y canchas</h2>
+
+          <div class="form-grid">
+            <label>
+              Horario mínimo por día
+              <input type="time" id="day-time-min" value="09:00" />
+            </label>
+
+            <label>
+              Horario máximo por día
+              <input type="time" id="day-time-max" value="22:00" />
+            </label>
+
+            <label>
+              Duración del partido (minutos, incluyendo colchón)
+              <input type="number" id="match-duration" min="10" step="5" value="60" />
+            </label>
+
+            <label>
+              Descanso mínimo entre partidos del mismo equipo (minutos)
+              <input type="number" id="rest-min" min="0" step="5" value="90" />
+            </label>
+          </div>
+
+          <h3>Canchas / sedes</h3>
+          <div class="panel-row">
+            <div class="panel-col">
+              <div class="form-grid">
+                <label>
+                  Nombre de cancha / sede
+                  <input type="text" id="field-name" placeholder="Ej: Cancha 1" />
+                </label>
+                <label>
+                  Máx. partidos por día (opcional)
+                  <input type="number" id="field-max-matches" min="0" />
+                </label>
+              </div>
+              <div class="panel-footer">
+                <button id="btn-add-field" class="btn primary">Agregar cancha</button>
+              </div>
+            </div>
+            <div class="panel-col">
+              <table class="data-table" id="fields-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Cancha</th>
+                    <th>Máx/día</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Filas generadas por JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <h3>Cortes / ventanas (horas bloqueadas)</h3>
+          <div class="panel-row">
+            <div class="panel-col">
+              <div class="form-grid">
+                <label>
+                  Desde
+                  <input type="time" id="break-from" value="13:00" />
+                </label>
+                <label>
+                  Hasta
+                  <input type="time" id="break-to" value="14:00" />
+                </label>
+              </div>
+              <div class="panel-footer">
+                <button id="btn-add-break" class="btn ghost">Agregar corte</button>
+              </div>
+            </div>
+            <div class="panel-col">
+              <ul id="breaks-list" class="tag-list">
+                <!-- Items generados por JS -->
+              </ul>
+            </div>
+          </div>
+
+          <div class="panel-footer">
+            <button class="btn ghost" data-prev-step="3">Volver</button>
+            <button class="btn primary" data-next-step="5">Continuar</button>
+          </div>
+        </section>
+
+        <!-- STEP 5: GENERAR FIXTURE -->
+        <section id="step-5" class="step-panel">
+          <h2>5. Generar fixture</h2>
+          <p>Cuando estés conforme con equipos, formato, fechas y canchas, generá el fixture:</p>
+          <button id="btn-generate-fixture" class="btn primary">Generar fixture</button>
+
+          <div id="fixture-result" class="fixture-container">
+            <!-- Aquí se renderizarán los partidos (por zona / día / cancha) -->
+          </div>
+
+          <div class="panel-footer">
+            <button class="btn ghost" data-prev-step="4">Volver</button>
+            <button class="btn primary" data-next-step="6">Continuar</button>
+          </div>
+        </section>
+
+        <!-- STEP 6: REPORTES / EXPORTAR -->
+        <section id="step-6" class="step-panel">
+          <h2>6. Reportes y exportación</h2>
+
+          <div class="export-buttons">
+            <button id="btn-view-by-zone" class="btn ghost">Vista por zona</button>
+            <button id="btn-view-by-day" class="btn ghost">Vista por día</button>
+            <button id="btn-view-by-field" class="btn ghost">Vista por cancha</button>
+            <button id="btn-view-by-team" class="btn ghost">Vista por equipo</button>
+          </div>
+
+          <div class="export-buttons">
+            <button id="btn-export-pdf" class="btn primary">Exportar PDF</button>
+            <button id="btn-export-csv" class="btn primary">Exportar CSV/Excel</button>
+            <button id="btn-export-image" class="btn primary">Exportar imagen</button>
+          </div>
+
+          <div id="export-preview" class="fixture-container">
+            <!-- Aquí se renderiza la vista actual para exportar -->
+          </div>
+
+          <div class="panel-footer">
+            <button class="btn ghost" data-prev-step="5">Volver</button>
+          </div>
+        </section>
+
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <span>Fixture Planner · Proyecto personal</span>
+    </footer>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
