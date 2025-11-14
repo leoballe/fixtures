@@ -1,20 +1,24 @@
-// app.js v0.4
+// app.js v0.5
 // - Generación de fixture (liga / zonas / eliminación)
 // - Scheduler básico
 // - Vistas por zona / día / cancha / equipo
 // - Exportar CSV, PNG, PDF (texto con jsPDF + autoTable)
-// - NUEVO: Playoffs automáticos desde zonas (placeholders 1°/2° por zona)
+// - Playoffs automáticos desde zonas con IDs de partido (P1, P2...) y refs GP / PP
+
+// =====================
+//  ESTADO GLOBAL
+// =====================
 
 const appState = {
   currentTournament: null,
   tournaments: [],
 };
 
-// Modo de vista actual para exportar (zona/día/cancha/equipo)
+// modo actual de vista en la pestaña de reportes
 let currentExportMode = "zone";
 
 // =====================
-//  UTILIDADES BÁSICAS
+//  UTILIDADES GENERALES
 // =====================
 
 function safeId(prefix) {
@@ -31,10 +35,10 @@ function createEmptyTournament() {
     dateEnd: "",
     storageMode: "local",
     format: {
-      type: "liga",
-      liga: { rounds: "ida" },
+      type: "liga", // liga | zonas | zonas-playoffs | eliminacion
+      liga: { rounds: "ida" }, // ida | ida-vuelta
       zonas: { qualifiersPerZone: 2, bestPlacesMode: "none" },
-      eliminacion: { type: "simple" },
+      eliminacion: { type: "simple" }, // simple | third-place | consolation
       restrictions: {
         avoidSameProvince: false,
         avoidSameClub: false,
@@ -54,7 +58,7 @@ function createEmptyTournament() {
 }
 
 // =====================
-//  STORAGE (LOCALSTORAGE)
+//  STORAGE LOCAL
 // =====================
 
 const LS_KEY = "fixture-planner-tournaments";
@@ -128,7 +132,7 @@ function formatDate(date) {
 }
 
 // =====================
-//  ENGINE: LIGA / ZONAS / ELIMINACIÓN
+//  ENGINE: LIGA / ZONAS
 // =====================
 
 function generarFixtureLiga(teamIds, options) {
@@ -140,7 +144,6 @@ function generarFixtureLiga(teamIds, options) {
   const equipos = teamIds.slice();
   if (equipos.length < 2) return [];
 
-  // Agregamos bye si es impar
   if (equipos.length % 2 === 1) {
     equipos.push(null);
   }
@@ -157,11 +160,16 @@ function generarFixtureLiga(teamIds, options) {
       if (home && away) {
         fixtures.push({
           id: safeId("m"),
+          code: null, // lo usamos para playoffs; en liga puede ir vacío
           zone: zone,
           homeTeamId: home,
           awayTeamId: away,
           homeSeed: null,
           awaySeed: null,
+          fromHomeMatchCode: null,
+          fromHomeResult: null,
+          fromAwayMatchCode: null,
+          fromAwayResult: null,
           date: null,
           time: null,
           fieldId: null,
@@ -179,11 +187,16 @@ function generarFixtureLiga(teamIds, options) {
   if (idaVuelta) {
     const vuelta = fixtures.map((m) => ({
       id: safeId("m"),
+      code: null,
       zone: m.zone,
       homeTeamId: m.awayTeamId,
       awayTeamId: m.homeTeamId,
       homeSeed: null,
       awaySeed: null,
+      fromHomeMatchCode: null,
+      fromHomeResult: null,
+      fromAwayMatchCode: null,
+      fromAwayResult: null,
       date: null,
       time: null,
       fieldId: null,
@@ -213,50 +226,132 @@ function generarFixtureZonas(zonesMap, options) {
   return all;
 }
 
+// =====================
+//  ENGINE: ELIMINACIÓN DIRECTA
+// =====================
+// Genera árbol completo de playoffs a partir de una lista de equipos.
+// Usa códigos P1, P2... y referencias GP/PP internamente como seeds de texto.
+
 function generarLlavesEliminacion(teamIds, options) {
   options = options || {};
-  const type = options.type || "simple";
-  const ids = teamIds.slice();
+  const elimType = options.type || "simple"; // simple | third-place | consolation
+  const ids = teamIds.slice().filter(Boolean);
   if (ids.length < 2) return [];
-  if (ids.length % 2 === 1) ids.push(null);
 
-  const n = ids.length;
-  const matches = [];
+  // si no es potencia de 2, por ahora no rellenamos con BYE: tomamos pares hasta agotar
+  const seeds = ids.map((id) => ({
+    label: null,
+    teamId: id,
+  }));
 
-  for (let i = 0; i < n / 2; i++) {
-    const home = ids[i];
-    const away = ids[n - 1 - i];
-    if (!home || !away) continue;
-    matches.push({
+  let matchCodeCounter = 0;
+  const rounds = [];
+
+  // Primera ronda con equipos reales
+  const round1 = [];
+  for (let i = 0; i < seeds.length; i += 2) {
+    const s1 = seeds[i];
+    const s2 = seeds[i + 1];
+    if (!s2) break;
+    const code = "P" + ++matchCodeCounter;
+    round1.push({
       id: safeId("m"),
+      code,
       zone: null,
-      homeTeamId: home,
-      awayTeamId: away,
+      homeTeamId: s1.teamId,
+      awayTeamId: s2.teamId,
       homeSeed: null,
       awaySeed: null,
+      fromHomeMatchCode: null,
+      fromHomeResult: null,
+      fromAwayMatchCode: null,
+      fromAwayResult: null,
       date: null,
       time: null,
       fieldId: null,
       round: 1,
-      phase: type === "consolation" ? "playoff-consolation" : "playoff-main",
+      phase: "playoff-main",
     });
   }
+  rounds.push(round1);
 
-  return matches;
+  // Rondas siguientes (ganadores GP)
+  while (rounds[rounds.length - 1].length > 1) {
+    const prev = rounds[rounds.length - 1];
+    const current = [];
+    for (let i = 0; i < prev.length; i += 2) {
+      const m1 = prev[i];
+      const m2 = prev[i + 1];
+      if (!m2) break;
+      const code = "P" + ++matchCodeCounter;
+      current.push({
+        id: safeId("m"),
+        code,
+        zone: null,
+        homeTeamId: null,
+        awayTeamId: null,
+        homeSeed: "GP " + m1.code,
+        awaySeed: "GP " + m2.code,
+        fromHomeMatchCode: m1.code,
+        fromHomeResult: "GP",
+        fromAwayMatchCode: m2.code,
+        fromAwayResult: "GP",
+        date: null,
+        time: null,
+        fieldId: null,
+        round: rounds.length + 1,
+        phase: "playoff-main",
+      });
+    }
+    rounds.push(current);
+  }
+
+  const all = rounds.flat();
+
+  // Tercer puesto (PP de las semis)
+  if (elimType === "third-place" || elimType === "consolation") {
+    if (rounds.length >= 2) {
+      const semis = rounds[rounds.length - 2];
+      if (semis.length >= 2) {
+        const s1 = semis[0];
+        const s2 = semis[1];
+        const code = "P" + ++matchCodeCounter;
+        all.push({
+          id: safeId("m"),
+          code,
+          zone: null,
+          homeTeamId: null,
+          awayTeamId: null,
+          homeSeed: "PP " + s1.code,
+          awaySeed: "PP " + s2.code,
+          fromHomeMatchCode: s1.code,
+          fromHomeResult: "PP",
+          fromAwayMatchCode: s2.code,
+          fromAwayResult: "PP",
+          date: null,
+          time: null,
+          fieldId: null,
+          round: rounds.length + 1,
+          phase: "playoff-third",
+        });
+      }
+    }
+  }
+
+  return all;
 }
 
 // =====================
-//  NUEVO: PLAYOFFS DESDE ZONAS (PLACEHOLDERS 1°/2°)
+//  ENGINE: PLAYOFFS DESDE ZONAS (PLACEHOLDERS 1°/2° + ÁRBOL COMPLETO)
 // =====================
 
-function generarPlayoffsDesdeZonas(t) {
+function generarPlayoffsDesdeZonas(t, elimType) {
   const zonesSet = new Set();
   t.teams.forEach((team) => {
     const z = (team.zone || "").trim();
     if (z) zonesSet.add(z);
   });
-  const zones = Array.from(zonesSet);
-  zones.sort((a, b) =>
+  const zones = Array.from(zonesSet).sort((a, b) =>
     a.localeCompare(b, "es", { numeric: true, sensitivity: "base" })
   );
 
@@ -276,84 +371,137 @@ function generarPlayoffsDesdeZonas(t) {
     );
   }
 
-  const matches = [];
+  // Construimos seeds de la primera ronda (texto tipo '1° A', '2° B', etc.)
+  let firstSeeds = [];
 
-  // Caso "clásico": 2 clasificados por zona, cantidad de zonas par, sin mejores terceros
   if (
     qualifiers === 2 &&
     bestMode === "none" &&
     zones.length >= 2 &&
     zones.length % 2 === 0
   ) {
+    // Esquema clásico: A vs B, C vs D, etc.
     for (let i = 0; i < zones.length; i += 2) {
       const zA = zones[i];
       const zB = zones[i + 1];
-
-      matches.push(
-        {
-          id: safeId("m"),
-          zone: null,
-          homeTeamId: null,
-          awayTeamId: null,
-          homeSeed: "1° " + zA,
-          awaySeed: "2° " + zB,
-          date: null,
-          time: null,
-          fieldId: null,
-          round: 1,
-          phase: "playoff-main",
-        },
-        {
-          id: safeId("m"),
-          zone: null,
-          homeTeamId: null,
-          awayTeamId: null,
-          homeSeed: "1° " + zB,
-          awaySeed: "2° " + zA,
-          date: null,
-          time: null,
-          fieldId: null,
-          round: 1,
-          phase: "playoff-main",
-        }
+      firstSeeds.push(
+        { label: "1° " + zA },
+        { label: "2° " + zB },
+        { label: "1° " + zB },
+        { label: "2° " + zA }
       );
     }
   } else {
-    // Fallback genérico: se arman seeds pos1, pos2... por zona y se emparejan secuencialmente.
-    const seeds = [];
+    // Fallback genérico: todos los 1°, luego todos los 2°, etc.
     for (let pos = 1; pos <= qualifiers; pos++) {
       zones.forEach((zoneName) => {
-        seeds.push({
+        firstSeeds.push({
           label: pos + "° " + zoneName,
         });
       });
     }
+  }
 
-    for (let i = 0; i < seeds.length; i += 2) {
-      const s1 = seeds[i];
-      const s2 = seeds[i + 1];
-      if (!s2) break;
-      matches.push({
+  // Construimos árbol completo igual que en eliminación directa,
+  // pero acá TODOS los seeds iniciales son placeholders de zona.
+  let matchCodeCounter = 0;
+  const rounds = [];
+
+  const round1 = [];
+  for (let i = 0; i < firstSeeds.length; i += 2) {
+    const s1 = firstSeeds[i];
+    const s2 = firstSeeds[i + 1];
+    if (!s2) break;
+    const code = "P" + ++matchCodeCounter;
+    round1.push({
+      id: safeId("m"),
+      code,
+      zone: null,
+      homeTeamId: null,
+      awayTeamId: null,
+      homeSeed: s1.label,
+      awaySeed: s2.label,
+      fromHomeMatchCode: null,
+      fromHomeResult: null,
+      fromAwayMatchCode: null,
+      fromAwayResult: null,
+      date: null,
+      time: null,
+      fieldId: null,
+      round: 1,
+      phase: "playoff-main",
+    });
+  }
+  rounds.push(round1);
+
+  // Siguientes rondas (ganadores GP)
+  while (rounds[rounds.length - 1].length > 1) {
+    const prev = rounds[rounds.length - 1];
+    const current = [];
+    for (let i = 0; i < prev.length; i += 2) {
+      const m1 = prev[i];
+      const m2 = prev[i + 1];
+      if (!m2) break;
+      const code = "P" + ++matchCodeCounter;
+      current.push({
         id: safeId("m"),
+        code,
         zone: null,
         homeTeamId: null,
         awayTeamId: null,
-        homeSeed: s1.label,
-        awaySeed: s2.label,
+        homeSeed: "GP " + m1.code,
+        awaySeed: "GP " + m2.code,
+        fromHomeMatchCode: m1.code,
+        fromHomeResult: "GP",
+        fromAwayMatchCode: m2.code,
+        fromAwayResult: "GP",
         date: null,
         time: null,
         fieldId: null,
-        round: 1,
+        round: rounds.length + 1,
         phase: "playoff-main",
       });
     }
+    rounds.push(current);
   }
 
-  return matches;
+  const all = rounds.flat();
+
+  // Tercer puesto (PP de las semis)
+  if (elimType === "third-place" || elimType === "consolation") {
+    if (rounds.length >= 2) {
+      const semis = rounds[rounds.length - 2];
+      if (semis.length >= 2) {
+        const s1 = semis[0];
+        const s2 = semis[1];
+        const code = "P" + ++matchCodeCounter;
+        all.push({
+          id: safeId("m"),
+          code,
+          zone: null,
+          homeTeamId: null,
+          awayTeamId: null,
+          homeSeed: "PP " + s1.code,
+          awaySeed: "PP " + s2.code,
+          fromHomeMatchCode: s1.code,
+          fromHomeResult: "PP",
+          fromAwayMatchCode: s2.code,
+          fromAwayResult: "PP",
+          date: null,
+          time: null,
+          fieldId: null,
+          round: rounds.length + 1,
+          phase: "playoff-third",
+        });
+      }
+    }
+  }
+
+  return all;
 }
 
 // =====================
-//  SCHEDULER BÁSICO
+//  SCHEDULER BÁSICO (ASIGNAR FECHAS / HORAS / CANCHAS)
 // =====================
 
 function asignarHorarios(matches, options) {
@@ -366,11 +514,6 @@ function asignarHorarios(matches, options) {
     return matches;
   }
 
-  let fields =
-    Array.isArray(options.fields) && options.fields.length
-      ? options.fields.slice()
-      : [{ id: safeId("field"), name: "Cancha 1", maxMatchesPerDay: null }];
-
   const minMin = parseTimeToMinutes(options.dayTimeMin || "09:00");
   const maxMin = parseTimeToMinutes(options.dayTimeMax || "22:00");
   const dur = options.matchDurationMinutes || 60;
@@ -380,6 +523,11 @@ function asignarHorarios(matches, options) {
     console.warn("Horario diario inválido; partidos sin programar");
     return matches;
   }
+
+  let fields =
+    Array.isArray(options.fields) && options.fields.length
+      ? options.fields.slice()
+      : [{ id: safeId("field"), name: "Cancha 1", maxMatchesPerDay: null }];
 
   const cortes = Array.isArray(options.breaks)
     ? options.breaks
@@ -468,7 +616,7 @@ function asignarHorarios(matches, options) {
 }
 
 // =====================
-//  INICIALIZACIÓN
+//  INICIALIZACIÓN GENERAL
 // =====================
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -493,6 +641,10 @@ function startNewTournament() {
   renderFixtureResult();
   renderExportView("zone");
 }
+
+// =====================
+//  NAVEGACIÓN PASOS
+// =====================
 
 function initNavigation() {
   const stepItems = document.querySelectorAll(".step-item");
@@ -543,7 +695,7 @@ function initNavigation() {
 }
 
 // =====================
-//  STEP 1: DATOS
+//  STEP 1: DATOS GENERALES
 // =====================
 
 function initStep1() {
@@ -792,7 +944,7 @@ function initFormatSection() {
 }
 
 // =====================
-//  STEP 4: CANCHAS / CORTES
+//  STEP 4: CANCHAS / CORTES / HORARIOS
 // =====================
 
 function initFieldsSection() {
@@ -905,7 +1057,6 @@ function initBreaksSection() {
 function renderBreaksList() {
   const ul = document.getElementById("breaks-list");
   if (!ul) return;
-  ul.innerHTML = "";
   const t = appState.currentTournament;
   if (!t) return;
   t.breaks.forEach((b, idx) => {
@@ -942,14 +1093,13 @@ function initFixtureGeneration() {
         restrictions: t.format.restrictions,
       };
 
-      let matches = [];
+      let matchesBase = [];
 
       if (t.format.type === "liga") {
         const ids = t.teams.map((e) => e.id);
-        const base = generarFixtureLiga(ids, {
+        matchesBase = generarFixtureLiga(ids, {
           idaVuelta: t.format.liga.rounds === "ida-vuelta",
         });
-        matches = asignarHorarios(base, scheduleOptions);
       } else if (t.format.type === "zonas") {
         const zonesMap = {};
         t.teams.forEach((team) => {
@@ -957,10 +1107,9 @@ function initFixtureGeneration() {
           if (!zonesMap[key]) zonesMap[key] = [];
           zonesMap[key].push(team.id);
         });
-        const base = generarFixtureZonas(zonesMap, {
+        matchesBase = generarFixtureZonas(zonesMap, {
           idaVuelta: t.format.liga.rounds === "ida-vuelta",
         });
-        matches = asignarHorarios(base, scheduleOptions);
       } else if (t.format.type === "zonas-playoffs") {
         const zonesMap = {};
         t.teams.forEach((team) => {
@@ -968,23 +1117,23 @@ function initFixtureGeneration() {
           if (!zonesMap[key]) zonesMap[key] = [];
           zonesMap[key].push(team.id);
         });
-
         const baseZonas = generarFixtureZonas(zonesMap, {
           idaVuelta: t.format.liga.rounds === "ida-vuelta",
         });
-        const scheduledZonas = asignarHorarios(baseZonas, scheduleOptions);
-        const playoffs = generarPlayoffsDesdeZonas(t);
-
-        // Playoffs quedan sin programar (sin fecha/hora/cancha)
-        matches = scheduledZonas.concat(playoffs);
+        const playoffs = generarPlayoffsDesdeZonas(
+          t,
+          t.format.eliminacion.type
+        );
+        // importante: zonas primero, luego playoffs por orden de ronda
+        matchesBase = baseZonas.concat(playoffs);
       } else if (t.format.type === "eliminacion") {
         const ids = t.teams.map((e) => e.id);
-        const base = generarLlavesEliminacion(ids, {
+        matchesBase = generarLlavesEliminacion(ids, {
           type: t.format.eliminacion.type,
         });
-        matches = asignarHorarios(base, scheduleOptions);
       }
 
+      const matches = asignarHorarios(matchesBase, scheduleOptions);
       t.matches = matches;
       upsertCurrentTournament();
       renderFixtureResult();
@@ -1021,6 +1170,7 @@ function renderFixtureResult() {
   thead.innerHTML =
     "<tr>" +
     "<th>#</th>" +
+    "<th>ID</th>" +
     "<th>Zona</th>" +
     "<th>Fecha</th>" +
     "<th>Hora</th>" +
@@ -1042,10 +1192,20 @@ function renderFixtureResult() {
     const field =
       m.fieldId && fieldById[m.fieldId] ? fieldById[m.fieldId].name : m.fieldId;
 
+    const phaseRoundLabel =
+      (m.phase || "") +
+      " (R" +
+      (m.round || "-") +
+      (m.code ? " · " + m.code : "") +
+      ")";
+
     const tr = document.createElement("tr");
     tr.innerHTML =
       "<td>" +
       (idx + 1) +
+      "</td>" +
+      "<td>" +
+      (m.code || "-") +
       "</td>" +
       "<td>" +
       (m.zone || "-") +
@@ -1065,10 +1225,8 @@ function renderFixtureResult() {
       awayLabel +
       "</td>" +
       "<td>" +
-      (m.phase || "") +
-      " (R" +
-      (m.round || "-") +
-      ")</td>";
+      phaseRoundLabel +
+      "</td>";
     tbody.appendChild(tr);
   });
 
@@ -1103,7 +1261,7 @@ function initReportsAndExport() {
 }
 
 function renderExportView(mode) {
-  currentExportMode = mode; // guardamos qué vista está activa
+  currentExportMode = mode;
 
   const container = document.getElementById("export-preview");
   if (!container) return;
@@ -1145,7 +1303,6 @@ function renderExportView(mode) {
       grouped[key].push(m);
     });
   } else if (mode === "team") {
-    // Agrupamos por equipo real (ignorando placeholders)
     t.matches.forEach((m) => {
       if (m.homeTeamId) {
         if (!grouped[m.homeTeamId]) grouped[m.homeTeamId] = [];
@@ -1207,6 +1364,7 @@ function renderExportView(mode) {
         "<th>Rol</th>" +
         "<th>Zona</th>" +
         "<th>Fase / Ronda</th>" +
+        "<th>ID</th>" +
         "</tr>";
     } else {
       thead.innerHTML =
@@ -1217,6 +1375,7 @@ function renderExportView(mode) {
         "<th>Partido</th>" +
         "<th>Zona</th>" +
         "<th>Fase / Ronda</th>" +
+        "<th>ID</th>" +
         "</tr>";
     }
     table.appendChild(thead);
@@ -1232,6 +1391,13 @@ function renderExportView(mode) {
         m.fieldId && fieldById[m.fieldId]
           ? fieldById[m.fieldId].name
           : m.fieldId || "-";
+
+      const phaseRoundLabel =
+        (m.phase || "") +
+        " (R" +
+        (m.round || "-") +
+        (m.code ? " · " + m.code : "") +
+        ")";
 
       const tr = document.createElement("tr");
 
@@ -1259,10 +1425,11 @@ function renderExportView(mode) {
           (m.zone || "-") +
           "</td>" +
           "<td>" +
-          (m.phase || "") +
-          " (R" +
-          (m.round || "-") +
-          ")</td>";
+          phaseRoundLabel +
+          "</td>" +
+          "<td>" +
+          (m.code || "-") +
+          "</td>";
       } else {
         tr.innerHTML =
           "<td>" +
@@ -1283,10 +1450,11 @@ function renderExportView(mode) {
           (m.zone || "-") +
           "</td>" +
           "<td>" +
-          (m.phase || "") +
-          " (R" +
-          (m.round || "-") +
-          ")</td>";
+          phaseRoundLabel +
+          "</td>" +
+          "<td>" +
+          (m.code || "-") +
+          "</td>";
       }
 
       tbody.appendChild(tr);
@@ -1327,6 +1495,7 @@ function exportMatchesAsCsv() {
       "Visitante",
       "Fase",
       "Ronda",
+      "IdPartido",
     ].join(";")
   );
 
@@ -1351,6 +1520,7 @@ function exportMatchesAsCsv() {
         awayLabel,
         m.phase || "",
         String(m.round || ""),
+        m.code || "",
       ].join(";")
     );
   });
@@ -1495,7 +1665,16 @@ function exportPreviewAsPdf() {
 
     if (mode === "team") {
       head = [
-        ["Fecha", "Hora", "Cancha", "Rival", "Rol", "Zona", "Fase / Ronda"],
+        [
+          "Fecha",
+          "Hora",
+          "Cancha",
+          "Rival",
+          "Rol",
+          "Zona",
+          "Fase / Ronda",
+          "ID",
+        ],
       ];
 
       grouped[key].forEach((m) => {
@@ -1509,6 +1688,12 @@ function exportPreviewAsPdf() {
             : m.fieldId || "";
         const isHome = m.role === "Local";
         const rivalLabel = isHome ? awayLabel : homeLabel;
+        const phaseRoundLabel =
+          (m.phase || "") +
+          " (R" +
+          (m.round || "-") +
+          (m.code ? " · " + m.code : "") +
+          ")";
 
         body.push([
           m.date || "",
@@ -1517,7 +1702,8 @@ function exportPreviewAsPdf() {
           rivalLabel,
           m.role || "",
           m.zone || "",
-          (m.phase || "") + " (R" + (m.round || "-") + ")",
+          phaseRoundLabel,
+          m.code || "",
         ]);
       });
     } else {
@@ -1530,6 +1716,7 @@ function exportPreviewAsPdf() {
           "Visitante",
           "Zona",
           "Fase / Ronda",
+          "ID",
         ],
       ];
 
@@ -1542,6 +1729,12 @@ function exportPreviewAsPdf() {
           m.fieldId && fieldById[m.fieldId]
             ? fieldById[m.fieldId].name
             : m.fieldId || "";
+        const phaseRoundLabel =
+          (m.phase || "") +
+          " (R" +
+          (m.round || "-") +
+          (m.code ? " · " + m.code : "") +
+          ")";
 
         body.push([
           m.date || "",
@@ -1550,7 +1743,8 @@ function exportPreviewAsPdf() {
           homeLabel,
           awayLabel,
           m.zone || "",
-          (m.phase || "") + " (R" + (m.round || "-") + ")",
+          phaseRoundLabel,
+          m.code || "",
         ]);
       });
     }
