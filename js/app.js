@@ -1083,6 +1083,9 @@ function asignarHorarios(matches, options) {
         .filter(Boolean)
     : [];
 
+  // ============================
+  // Generar slots (fecha + hora + cancha) para TODOS los días
+  // ============================
   const slots = [];
   let dayIndex = 0;
   for (
@@ -1100,6 +1103,7 @@ function asignarHorarios(matches, options) {
       for (const field of fields) {
         slots.push({
           date: dateStr,
+          dayIndex: dayIndex,              // NUEVO: índice de día
           absoluteStart: base + start,
           startMinutes: start,
           fieldId: field.id,
@@ -1113,8 +1117,16 @@ function asignarHorarios(matches, options) {
     return matches;
   }
 
+  // ============================
+  // Reparto "equilibrado" de partidos por día
+  // ============================
+  const numDays = dayIndex; // cantidad de días en el rango
+  const maxMatchesPerDay =
+    numDays > 0 ? Math.ceil(matches.length / numDays) : matches.length;
+  const usedPerDay = new Array(numDays).fill(0);
+
   const used = new Array(slots.length).fill(false);
-  const lastEnd = {};
+  const lastEnd = {}; // último final de partido por equipo (minutos absolutos)
 
   const scheduled = matches.map((m) => {
     const home = m.homeTeamId;
@@ -1124,6 +1136,15 @@ function asignarHorarios(matches, options) {
     for (let i = 0; i < slots.length; i++) {
       if (used[i]) continue;
       const s = slots[i];
+
+      // No superar el cupo máximo de partidos para ese día
+      if (
+        typeof s.dayIndex === "number" &&
+        usedPerDay[s.dayIndex] >= maxMatchesPerDay
+      ) {
+        continue;
+      }
+
       const startAbs = s.absoluteStart;
       const endAbs = s.absoluteStart + dur;
 
@@ -1140,10 +1161,14 @@ function asignarHorarios(matches, options) {
       if (home) lastEnd[home] = endAbs;
       if (away) lastEnd[away] = endAbs;
       used[i] = true;
+      if (typeof s.dayIndex === "number") {
+        usedPerDay[s.dayIndex]++;
+      }
       break;
     }
 
     if (chosen === -1) {
+      // No se encontró slot válido para este partido
       return Object.assign({}, m, { date: null, time: null, fieldId: null });
     } else {
       const s = slots[chosen];
@@ -1157,6 +1182,7 @@ function asignarHorarios(matches, options) {
 
   return scheduled;
 }
+
 // =====================
 //  RENUMERAR PARTIDOS CON IDs NUMÉRICOS
 // =====================
