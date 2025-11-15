@@ -503,6 +503,549 @@ function generarPlayoffsDesdeZonas(t, elimType) {
 // =====================
 //  SCHEDULER BÁSICO (ASIGNAR FECHAS / HORAS / CANCHAS)
 // =====================
+// =====================
+//  LIGA CON SEEDS (SIN IDs DE EQUIPO)
+// =====================
+
+function generarLigaSeeds(seedLabels, options) {
+  options = options || {};
+  const idaVuelta = !!options.idaVuelta;
+  const zone = options.zone || null;
+  const phase = options.phase || "fase-liga";
+
+  const seeds = seedLabels.slice();
+  if (seeds.length < 2) return [];
+
+  if (seeds.length % 2 === 1) {
+    seeds.push(null);
+  }
+
+  const n = seeds.length;
+  const rondas = n - 1;
+  const fixtures = [];
+  let arr = seeds.slice();
+
+  for (let r = 0; r < rondas; r++) {
+    for (let i = 0; i < n / 2; i++) {
+      const home = arr[i];
+      const away = arr[n - 1 - i];
+      if (home && away) {
+        fixtures.push({
+          id: safeId("m"),
+          code: null,
+          zone: zone,
+          homeTeamId: null,
+          awayTeamId: null,
+          homeSeed: home,
+          awaySeed: away,
+          fromHomeMatchCode: null,
+          fromHomeResult: null,
+          fromAwayMatchCode: null,
+          fromAwayResult: null,
+          date: null,
+          time: null,
+          fieldId: null,
+          round: r + 1,
+          phase: phase,
+        });
+      }
+    }
+    const fixed = arr[0];
+    const rotating = arr.slice(1);
+    rotating.unshift(rotating.pop());
+    arr = [fixed].concat(rotating);
+  }
+
+  if (idaVuelta) {
+    const vuelta = fixtures.map((m) => ({
+      id: safeId("m"),
+      code: null,
+      zone: m.zone,
+      homeTeamId: null,
+      awayTeamId: null,
+      homeSeed: m.awaySeed,
+      awaySeed: m.homeSeed,
+      fromHomeMatchCode: null,
+      fromHomeResult: null,
+      fromAwayMatchCode: null,
+      fromAwayResult: null,
+      date: null,
+      time: null,
+      fieldId: null,
+      round: m.round + rondas,
+      phase: phase + "-vuelta",
+    }));
+    return fixtures.concat(vuelta);
+  }
+
+  return fixtures;
+}
+
+// =====================
+//  FORMATO ESPECIAL 8x3 (24 EQUIPOS)
+// =====================
+
+function generarEspecial8x3(t) {
+  // Construimos el mapa de zonas desde los equipos
+  const zonesMap = {};
+  const teamsWithZone = new Set();
+  t.teams.forEach((team) => {
+    const z = (team.zone || "").trim();
+    if (!z) return;
+    if (!zonesMap[z]) zonesMap[z] = [];
+    zonesMap[z].push(team.id);
+    teamsWithZone.add(team.id);
+  });
+
+  const zoneNames = Object.keys(zonesMap).sort((a, b) =>
+    a.localeCompare(b, "es", { numeric: true, sensitivity: "base" })
+  );
+
+  if (zoneNames.length !== 8) {
+    alert(
+      "El formato especial 8×3 requiere exactamente 8 zonas.\n" +
+        "Actualmente se detectan " +
+        zoneNames.length +
+        " zonas. Verificá la columna 'Zona' de los equipos."
+    );
+    return [];
+  }
+
+  let totalEnZonas = 0;
+  for (const z of zoneNames) {
+    const count = zonesMap[z].length;
+    totalEnZonas += count;
+    if (count !== 3) {
+      alert(
+        "El formato especial 8×3 requiere que cada zona tenga exactamente 3 equipos.\n" +
+          "La zona '" +
+          z +
+          "' tiene " +
+          count +
+          " equipos."
+      );
+      return [];
+    }
+  }
+
+  if (totalEnZonas !== t.teams.length) {
+    alert(
+      "Hay equipos sin zona asignada o con una zona distinta de las 8 definidas.\n" +
+        "Equipos totales: " +
+        t.teams.length +
+        " · Equipos en zonas válidas: " +
+        totalEnZonas +
+        "."
+    );
+    return [];
+  }
+
+  const idaVuelta = !!(
+    t.format &&
+    t.format.liga &&
+    t.format.liga.rounds === "ida-vuelta"
+  );
+
+  const allMatches = [];
+
+  // ---------------------
+  // FASE 1: ZONAS INICIALES (8×3)
+  // ---------------------
+  const fase1 = generarFixtureZonas(zonesMap, {
+    idaVuelta: idaVuelta,
+  });
+  fase1.forEach((m) => {
+    m.phase = "Fase 1 · zonas (8×3)";
+  });
+  allMatches.push(...fase1);
+
+  // ---------------------
+  // FASE 2: ZONAS A1 y A2 (1° de cada zona)
+  // ---------------------
+  const z1 = zoneNames[0];
+  const z2 = zoneNames[1];
+  const z3 = zoneNames[2];
+  const z4 = zoneNames[3];
+  const z5 = zoneNames[4];
+  const z6 = zoneNames[5];
+  const z7 = zoneNames[6];
+  const z8 = zoneNames[7];
+
+  const seedsA1 = ["1° " + z1, "1° " + z3, "1° " + z5, "1° " + z7];
+  const seedsA2 = ["1° " + z2, "1° " + z4, "1° " + z6, "1° " + z8];
+
+  const zonaA1 = generarLigaSeeds(seedsA1, {
+    idaVuelta: idaVuelta,
+    zone: "Zona A1",
+    phase: "Fase 2 · Zona A1 (1° de zonas)",
+  });
+  const zonaA2 = generarLigaSeeds(seedsA2, {
+    idaVuelta: idaVuelta,
+    zone: "Zona A2",
+    phase: "Fase 2 · Zona A2 (1° de zonas)",
+  });
+
+  allMatches.push(...zonaA1, ...zonaA2);
+
+  // ---------------------
+  // FASE 3: PUESTOS 1–8 (cruce A1 vs A2)
+  // ---------------------
+  function crearPartidoPosicion(posicion) {
+    return {
+      id: safeId("m"),
+      code: null,
+      zone: "Puestos 1-8",
+      homeTeamId: null,
+      awayTeamId: null,
+      homeSeed: posicion + "° Zona A1",
+      awaySeed: posicion + "° Zona A2",
+      fromHomeMatchCode: null,
+      fromHomeResult: null,
+      fromAwayMatchCode: null,
+      fromAwayResult: null,
+      date: null,
+      time: null,
+      fieldId: null,
+      round: 1,
+      phase: "Puestos 1-8",
+    };
+  }
+
+  allMatches.push(
+    crearPartidoPosicion(1),
+    crearPartidoPosicion(2),
+    crearPartidoPosicion(3),
+    crearPartidoPosicion(4)
+  );
+
+  // ---------------------
+  // FASE 4: PUESTOS 9–16 (2° de zonas)
+  // ---------------------
+  function crearMatchClasif(code, homeSeed, awaySeed, round, phase, zone) {
+    return {
+      id: safeId("m"),
+      code: code,
+      zone: zone,
+      homeTeamId: null,
+      awayTeamId: null,
+      homeSeed: homeSeed,
+      awaySeed: awaySeed,
+      fromHomeMatchCode: null,
+      fromHomeResult: null,
+      fromAwayMatchCode: null,
+      fromAwayResult: null,
+      date: null,
+      time: null,
+      fieldId: null,
+      round: round,
+      phase: phase,
+    };
+  }
+
+  function crearMatchDesdeGP_PP(
+    code,
+    fromCodeHome,
+    fromResHome,
+    fromCodeAway,
+    fromResAway,
+    round,
+    phase,
+    zone
+  ) {
+    return {
+      id: safeId("m"),
+      code: code,
+      zone: zone,
+      homeTeamId: null,
+      awayTeamId: null,
+      homeSeed: fromResHome + " " + fromCodeHome,
+      awaySeed: fromResAway + " " + fromCodeAway,
+      fromHomeMatchCode: fromCodeHome,
+      fromHomeResult: fromResHome,
+      fromAwayMatchCode: fromCodeAway,
+      fromAwayResult: fromResAway,
+      date: null,
+      time: null,
+      fieldId: null,
+      round: round,
+      phase: phase,
+    };
+  }
+
+  const phase9_16 = "Puestos 9-16";
+  const zone9_16 = "Puestos 9-16";
+
+  // Ronda 1 (2° de zonas)
+  const m9_1 = crearMatchClasif(
+    "P9_1",
+    "2° " + z1,
+    "2° " + z3,
+    1,
+    phase9_16,
+    zone9_16
+  );
+  const m9_2 = crearMatchClasif(
+    "P9_2",
+    "2° " + z5,
+    "2° " + z7,
+    1,
+    phase9_16,
+    zone9_16
+  );
+  const m9_3 = crearMatchClasif(
+    "P9_3",
+    "2° " + z2,
+    "2° " + z4,
+    1,
+    phase9_16,
+    zone9_16
+  );
+  const m9_4 = crearMatchClasif(
+    "P9_4",
+    "2° " + z6,
+    "2° " + z8,
+    1,
+    phase9_16,
+    zone9_16
+  );
+
+  // Ronda 2 (ganadores y perdedores)
+  const m9_5 = crearMatchDesdeGP_PP(
+    "P9_5",
+    m9_1.code,
+    "GP",
+    m9_2.code,
+    "GP",
+    2,
+    phase9_16,
+    zone9_16
+  );
+  const m9_6 = crearMatchDesdeGP_PP(
+    "P9_6",
+    m9_3.code,
+    "GP",
+    m9_4.code,
+    "GP",
+    2,
+    phase9_16,
+    zone9_16
+  );
+  const m9_7 = crearMatchDesdeGP_PP(
+    "P9_7",
+    m9_1.code,
+    "PP",
+    m9_2.code,
+    "PP",
+    2,
+    phase9_16,
+    zone9_16
+  );
+  const m9_8 = crearMatchDesdeGP_PP(
+    "P9_8",
+    m9_3.code,
+    "PP",
+    m9_4.code,
+    "PP",
+    2,
+    phase9_16,
+    zone9_16
+  );
+
+  // Ronda 3 (definición de 9–16)
+  const m9_9 = crearMatchDesdeGP_PP(
+    "P9_9",
+    m9_5.code,
+    "GP",
+    m9_6.code,
+    "GP",
+    3,
+    phase9_16,
+    zone9_16
+  );
+  const m9_10 = crearMatchDesdeGP_PP(
+    "P9_10",
+    m9_5.code,
+    "PP",
+    m9_6.code,
+    "PP",
+    3,
+    phase9_16,
+    zone9_16
+  );
+  const m9_11 = crearMatchDesdeGP_PP(
+    "P9_11",
+    m9_7.code,
+    "GP",
+    m9_8.code,
+    "GP",
+    3,
+    phase9_16,
+    zone9_16
+  );
+  const m9_12 = crearMatchDesdeGP_PP(
+    "P9_12",
+    m9_7.code,
+    "PP",
+    m9_8.code,
+    "PP",
+    3,
+    phase9_16,
+    zone9_16
+  );
+
+  allMatches.push(
+    m9_1,
+    m9_2,
+    m9_3,
+    m9_4,
+    m9_5,
+    m9_6,
+    m9_7,
+    m9_8,
+    m9_9,
+    m9_10,
+    m9_11,
+    m9_12
+  );
+
+  // ---------------------
+  // FASE 5: PUESTOS 17–24 (3° de zonas)
+  // ---------------------
+  const phase17_24 = "Puestos 17-24";
+  const zone17_24 = "Puestos 17-24";
+
+  const m17_1 = crearMatchClasif(
+    "P17_1",
+    "3° " + z1,
+    "3° " + z3,
+    1,
+    phase17_24,
+    zone17_24
+  );
+  const m17_2 = crearMatchClasif(
+    "P17_2",
+    "3° " + z5,
+    "3° " + z7,
+    1,
+    phase17_24,
+    zone17_24
+  );
+  const m17_3 = crearMatchClasif(
+    "P17_3",
+    "3° " + z2,
+    "3° " + z4,
+    1,
+    phase17_24,
+    zone17_24
+  );
+  const m17_4 = crearMatchClasif(
+    "P17_4",
+    "3° " + z6,
+    "3° " + z8,
+    1,
+    phase17_24,
+    zone17_24
+  );
+
+  const m17_5 = crearMatchDesdeGP_PP(
+    "P17_5",
+    m17_1.code,
+    "GP",
+    m17_2.code,
+    "GP",
+    2,
+    phase17_24,
+    zone17_24
+  );
+  const m17_6 = crearMatchDesdeGP_PP(
+    "P17_6",
+    m17_3.code,
+    "GP",
+    m17_4.code,
+    "GP",
+    2,
+    phase17_24,
+    zone17_24
+  );
+  const m17_7 = crearMatchDesdeGP_PP(
+    "P17_7",
+    m17_1.code,
+    "PP",
+    m17_2.code,
+    "PP",
+    2,
+    phase17_24,
+    zone17_24
+  );
+  const m17_8 = crearMatchDesdeGP_PP(
+    "P17_8",
+    m17_3.code,
+    "PP",
+    m17_4.code,
+    "PP",
+    2,
+    phase17_24,
+    zone17_24
+  );
+
+  const m17_9 = crearMatchDesdeGP_PP(
+    "P17_9",
+    m17_5.code,
+    "GP",
+    m17_6.code,
+    "GP",
+    3,
+    phase17_24,
+    zone17_24
+  );
+  const m17_10 = crearMatchDesdeGP_PP(
+    "P17_10",
+    m17_5.code,
+    "PP",
+    m17_6.code,
+    "PP",
+    3,
+    phase17_24,
+    zone17_24
+  );
+  const m17_11 = crearMatchDesdeGP_PP(
+    "P17_11",
+    m17_7.code,
+    "GP",
+    m17_8.code,
+    "GP",
+    3,
+    phase17_24,
+    zone17_24
+  );
+  const m17_12 = crearMatchDesdeGP_PP(
+    "P17_12",
+    m17_7.code,
+    "PP",
+    m17_8.code,
+    "PP",
+    3,
+    phase17_24,
+    zone17_24
+  );
+
+  allMatches.push(
+    m17_1,
+    m17_2,
+    m17_3,
+    m17_4,
+    m17_5,
+    m17_6,
+    m17_7,
+    m17_8,
+    m17_9,
+    m17_10,
+    m17_11,
+    m17_12
+  );
+
+  return allMatches;
+}
 
 function asignarHorarios(matches, options) {
   if (!matches.length) return matches;
@@ -981,7 +1524,7 @@ function initFormatSection() {
   function refreshFormatPanels() {
     const type = formatSelect.value;
     document.getElementById("format-liga-options").style.display =
-      type === "liga" ? "block" : "none";
+      type === "liga" || type === "especial-8x3" ? "block" : "none";
     document.getElementById("format-zonas-options").style.display =
       type === "zonas" || type === "zonas-playoffs" ? "block" : "none";
     document.getElementById("format-elim-options").style.display =
@@ -1141,7 +1684,7 @@ function initFixtureGeneration() {
         restrictions: t.format.restrictions,
       };
 
-      let matchesBase = [];
+          let matchesBase = [];
 
       if (t.format.type === "liga") {
         const ids = t.teams.map((e) => e.id);
@@ -1174,12 +1717,19 @@ function initFixtureGeneration() {
         );
         // importante: zonas primero, luego playoffs por orden de ronda
         matchesBase = baseZonas.concat(playoffs);
+      } else if (t.format.type === "especial-8x3") {
+        matchesBase = generarEspecial8x3(t);
+        if (!matchesBase || !matchesBase.length) {
+          // generarEspecial8x3 ya muestra un mensaje explicando el problema
+          return;
+        }
       } else if (t.format.type === "eliminacion") {
         const ids = t.teams.map((e) => e.id);
         matchesBase = generarLlavesEliminacion(ids, {
           type: t.format.eliminacion.type,
         });
       }
+
       // Renumeramos TODOS los partidos con IDs numéricos globales (1, 2, 3, ...)
       matchesBase = renumerarPartidosConIdsNumericos(matchesBase);
 
