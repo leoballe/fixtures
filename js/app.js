@@ -1127,22 +1127,8 @@ function generarEspecial8x3(t) {
 function asignarHorarios(matches, options) {
   if (!matches.length) return matches;
 
-  const dateStartObj = dateStrToDate(options.dateStart);
-  const dateEndObj = dateStrToDate(options.dateEnd);
-  if (!dateStartObj || !dateEndObj || dateEndObj < dateStartObj) {
-    console.warn("Rango de fechas inválido; partidos sin programar");
-    return matches;
-  }
-
-  const minMin = parseTimeToMinutes(options.dayTimeMin || "09:00");
-  const maxMin = parseTimeToMinutes(options.dayTimeMax || "22:00");
   const dur = options.matchDurationMinutes || 60;
   const rest = options.restMinMinutes || 0;
-
-  if (minMin === null || maxMin === null || maxMin <= minMin) {
-    console.warn("Horario diario inválido; partidos sin programar");
-    return matches;
-  }
 
   let fields =
     Array.isArray(options.fields) && options.fields.length
@@ -1160,33 +1146,94 @@ function asignarHorarios(matches, options) {
         .filter(Boolean)
     : [];
 
-  // ============================
-  // Generar slots (fecha + hora + cancha) para TODOS los días
-  // ============================
+  const dayConfigs =
+    Array.isArray(options.dayConfigs) && options.dayConfigs.length
+      ? options.dayConfigs
+      : null;
+
   const slots = [];
-  let dayIndex = 0;
-  for (
-    let d = new Date(dateStartObj.getTime());
-    d <= dateEndObj;
-    d = addDays(d, 1), dayIndex++
-  ) {
-    const dateStr = formatDate(d);
-    const base = dayIndex * 24 * 60;
-    for (let t = minMin; t + dur <= maxMin; t += dur) {
-      const start = t;
-      const end = t + dur;
-      const inBreak = cortes.some((c) => !(end <= c.from || start >= c.to));
-      if (inBreak) continue;
-      for (const field of fields) {
-        slots.push({
-          date: dateStr,
-          dayIndex: dayIndex,              // NUEVO: índice de día
-          absoluteStart: base + start,
-          startMinutes: start,
-          fieldId: field.id,
-        });
+  let numDays = 0;
+
+  if (dayConfigs) {
+    // Usamos la configuración detallada de días (tipo, horarios, etc.)
+    numDays = dayConfigs.length;
+
+    dayConfigs.forEach((dc, dayIdx) => {
+      if (!dc || dc.type === "off") return;
+
+      const dateStr = dc.date;
+      const timeMinStr = dc.timeMin || options.dayTimeMin || "09:00";
+      const timeMaxStr = dc.timeMax || options.dayTimeMax || "22:00";
+      const minMin = parseTimeToMinutes(timeMinStr);
+      const maxMin = parseTimeToMinutes(timeMaxStr);
+      if (minMin === null || maxMin === null || maxMin <= minMin) return;
+
+      const base = dayIdx * 24 * 60;
+
+      for (let t = minMin; t + dur <= maxMin; t += dur) {
+        const inBreak = cortes.some((c) => !(t + dur <= c.from || t >= c.to));
+        if (inBreak) continue;
+
+        for (const field of fields) {
+          if (
+            Array.isArray(field.daysEnabled) &&
+            field.daysEnabled.length === numDays &&
+            field.daysEnabled[dayIdx] === false
+          ) {
+            continue;
+          }
+
+          slots.push({
+            date: dateStr,
+            dayIndex: dayIdx,
+            absoluteStart: base + t,
+            startMinutes: t,
+            fieldId: field.id,
+          });
+        }
+      }
+    });
+  } else {
+    // Modo antiguo: rango de fechas uniforme
+    const dateStartObj = dateStrToDate(options.dateStart);
+    const dateEndObj = dateStrToDate(options.dateEnd);
+    if (!dateStartObj || !dateEndObj || dateEndObj < dateStartObj) {
+      console.warn("Rango de fechas inválido; partidos sin programar");
+      return matches;
+    }
+
+    const minMin = parseTimeToMinutes(options.dayTimeMin || "09:00");
+    const maxMin = parseTimeToMinutes(options.dayTimeMax || "22:00");
+    if (minMin === null || maxMin === null || maxMin <= minMin) {
+      console.warn("Horario diario inválido; partidos sin programar");
+      return matches;
+    }
+
+    let dayIdx = 0;
+    for (
+      let d = new Date(dateStartObj.getTime());
+      d <= dateEndObj;
+      d = addDays(d, 1), dayIdx++
+    ) {
+      const dateStr = formatDate(d);
+      const base = dayIdx * 24 * 60;
+
+      for (let t = minMin; t + dur <= maxMin; t += dur) {
+        const inBreak = cortes.some((c) => !(t + dur <= c.from || t >= c.to));
+        if (inBreak) continue;
+
+        for (const field of fields) {
+          slots.push({
+            date: dateStr,
+            dayIndex: dayIdx,
+            absoluteStart: base + t,
+            startMinutes: t,
+            fieldId: field.id,
+          });
+        }
       }
     }
+    numDays = dayIdx;
   }
 
   if (!slots.length) {
@@ -1194,16 +1241,11 @@ function asignarHorarios(matches, options) {
     return matches;
   }
 
-  // ============================
-  // Reparto "equilibrado" de partidos por día
-  // ============================
-  const numDays = dayIndex; // cantidad de días en el rango
-  const maxMatchesPerDay =
-    numDays > 0 ? Math.ceil(matches.length / numDays) : matches.length;
-  const usedPerDay = new Array(numDays).fill(0);
-
   const used = new Array(slots.length).fill(false);
   const lastEnd = {}; // último final de partido por equipo (minutos absolutos)
+  const usedPerDay = new Array(numDays).fill(0);
+  const maxMatchesPerDay =
+    numDays > 0 ? Math.ceil(matches.length / numDays) : matches.length;
 
   const scheduled = matches.map((m) => {
     const home = m.homeTeamId;
@@ -1214,7 +1256,7 @@ function asignarHorarios(matches, options) {
       if (used[i]) continue;
       const s = slots[i];
 
-      // No superar el cupo máximo de partidos para ese día
+      // Limitar partidos por día para repartir la carga
       if (
         typeof s.dayIndex === "number" &&
         usedPerDay[s.dayIndex] >= maxMatchesPerDay
@@ -1238,14 +1280,14 @@ function asignarHorarios(matches, options) {
       if (home) lastEnd[home] = endAbs;
       if (away) lastEnd[away] = endAbs;
       used[i] = true;
-      if (typeof s.dayIndex === "number") {
+      if (typeof s.dayIndex === "number" && s.dayIndex >= 0) {
         usedPerDay[s.dayIndex]++;
       }
       break;
     }
 
     if (chosen === -1) {
-      // No se encontró slot válido para este partido
+      // No se encontró slot válido → partido queda sin programar
       return Object.assign({}, m, { date: null, time: null, fieldId: null });
     } else {
       const s = slots[chosen];
@@ -1323,6 +1365,7 @@ document.addEventListener("DOMContentLoaded", () => {
   startNewTournament();
   initNavigation();
   initStep1();
+  initScheduleDaysUI(); // NUEVO
   initTeamsSection();
   initFieldsSection();
   initBreaksSection();
@@ -1641,6 +1684,240 @@ function initFormatSection() {
 // =====================
 //  STEP 4: CANCHAS / CORTES / HORARIOS
 // =====================
+// =====================
+//  CALENDARIO DE DÍAS DEL TORNEO + DISPONIBILIDAD POR CANCHA
+// =====================
+
+function ensureDayConfigs(t) {
+  if (!t) return;
+  if (!t.schedule) t.schedule = {};
+
+  const dateStart = dateStrToDate(t.dateStart);
+  const dateEnd = dateStrToDate(t.dateEnd);
+  if (!dateStart || !dateEnd || dateEnd < dateStart) {
+    t.schedule.dayConfigs = [];
+    return;
+  }
+
+  const prev = Array.isArray(t.schedule.dayConfigs)
+    ? t.schedule.dayConfigs
+    : [];
+
+  const list = [];
+  let idx = 0;
+  for (
+    let d = new Date(dateStart.getTime());
+    d <= dateEnd;
+    d = addDays(d, 1), idx++
+  ) {
+    const dateStr = formatDate(d);
+    const existing = prev.find((dc) => dc.date === dateStr);
+    if (existing) {
+      existing.index = idx + 1;
+      if (!existing.type) existing.type = "full";
+      if (!existing.timeMin)
+        existing.timeMin = t.schedule.dayTimeMin || "09:00";
+      if (!existing.timeMax)
+        existing.timeMax = t.schedule.dayTimeMax || "22:00";
+      list.push(existing);
+    } else {
+      list.push({
+        index: idx + 1,
+        date: dateStr,
+        type: "full",
+        timeMin: t.schedule.dayTimeMin || "09:00",
+        timeMax: t.schedule.dayTimeMax || "22:00",
+      });
+    }
+  }
+
+  t.schedule.dayConfigs = list;
+}
+
+function renderDayConfigs() {
+  const t = appState.currentTournament;
+  if (!t) return;
+  const tbody = document.getElementById("schedule-days-body");
+  if (!tbody) return;
+
+  ensureDayConfigs(t);
+  const dayConfigs = t.schedule.dayConfigs || [];
+  tbody.innerHTML = "";
+
+  if (!dayConfigs.length) {
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td colspan="5" class="text-muted">Definí primero la fecha de inicio y fin del torneo en el Paso 1.</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+
+  dayConfigs.forEach((dc, idx) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      "<td>Día " +
+      (dc.index || idx + 1) +
+      "</td>" +
+      "<td>" +
+      (dc.date || "") +
+      "</td>" +
+      '<td><select data-day-idx="' +
+      idx +
+      '" class="day-type">' +
+      '<option value="full">Completo</option>' +
+      '<option value="half">Medio día</option>' +
+      '<option value="off">No se juega</option>' +
+      "</select></td>" +
+      '<td><input type="time" class="day-time-min" data-day-idx="' +
+      idx +
+      '" value="' +
+      (dc.timeMin || t.schedule.dayTimeMin || "09:00") +
+      '"></td>' +
+      '<td><input type="time" class="day-time-max" data-day-idx="' +
+      idx +
+      '" value="' +
+      (dc.timeMax || t.schedule.dayTimeMax || "22:00") +
+      '"></td>';
+
+    tbody.appendChild(tr);
+  });
+
+  // Setear valores iniciales de tipo
+  dayConfigs.forEach((dc, idx) => {
+    const sel = tbody.querySelector('select[data-day-idx="' + idx + '"]');
+    if (sel) {
+      sel.value = dc.type || "full";
+    }
+  });
+
+  // Cambios de tipo (Completo / Medio / No se juega)
+  tbody.querySelectorAll("select.day-type").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const idx = parseInt(sel.getAttribute("data-day-idx"), 10);
+      if (!t.schedule.dayConfigs || !t.schedule.dayConfigs[idx]) return;
+      t.schedule.dayConfigs[idx].type = sel.value;
+    });
+  });
+
+  // Cambios de hora inicio / fin
+  tbody.querySelectorAll("input.day-time-min").forEach((inp) => {
+    inp.addEventListener("change", () => {
+      const idx = parseInt(inp.getAttribute("data-day-idx"), 10);
+      if (!t.schedule.dayConfigs || !t.schedule.dayConfigs[idx]) return;
+      t.schedule.dayConfigs[idx].timeMin = inp.value || null;
+    });
+  });
+
+  tbody.querySelectorAll("input.day-time-max").forEach((inp) => {
+    inp.addEventListener("change", () => {
+      const idx = parseInt(inp.getAttribute("data-day-idx"), 10);
+      if (!t.schedule.dayConfigs || !t.schedule.dayConfigs[idx]) return;
+      t.schedule.dayConfigs[idx].timeMax = inp.value || null;
+    });
+  });
+
+  // Después de ajustar días, actualizamos matriz de canchas
+  renderFieldDaysMatrix();
+}
+
+function renderFieldDaysMatrix() {
+  const t = appState.currentTournament;
+  if (!t) return;
+  const container = document.getElementById("field-days-container");
+  if (!container) return;
+
+  const dayConfigs = (t.schedule && t.schedule.dayConfigs) || [];
+  const fields = (t.schedule && t.schedule.fields) || [];
+
+  if (!dayConfigs.length || !fields.length) {
+    container.innerHTML =
+      '<p class="text-muted">Definí las fechas del torneo y cargá al menos una cancha para configurar la disponibilidad por día.</p>';
+    return;
+  }
+
+  // Asegurar estructura daysEnabled en cada cancha
+  fields.forEach((field) => {
+    if (!Array.isArray(field.daysEnabled)) {
+      field.daysEnabled = [];
+    }
+    for (let i = 0; i < dayConfigs.length; i++) {
+      if (typeof field.daysEnabled[i] !== "boolean") {
+        field.daysEnabled[i] = true; // por defecto, disponible
+      }
+    }
+    field.daysEnabled = field.daysEnabled.slice(0, dayConfigs.length);
+  });
+
+  let html = '<table class="data-table">';
+  html += "<thead><tr><th>Cancha</th>";
+  dayConfigs.forEach((dc, idx) => {
+    html += "<th>Día " + (dc.index || idx + 1) + "</th>";
+  });
+  html += "</tr></thead><tbody>";
+
+  fields.forEach((field) => {
+    html += "<tr>";
+    html += "<td>" + (field.name || "(sin nombre)") + "</td>";
+    dayConfigs.forEach((dc, dayIdx) => {
+      const checked =
+        !Array.isArray(field.daysEnabled) ||
+        field.daysEnabled[dayIdx] !== false
+          ? "checked"
+          : "";
+      html +=
+        '<td style="text-align:center;"><input type="checkbox" class="field-day-toggle" data-field-id="' +
+        field.id +
+        '" data-day-idx="' +
+        dayIdx +
+        '" ' +
+        checked +
+        "></td>";
+    });
+    html += "</tr>";
+  });
+
+  html += "</tbody></table>";
+  container.innerHTML = html;
+
+  container.querySelectorAll(".field-day-toggle").forEach((chk) => {
+    chk.addEventListener("change", () => {
+      const fieldId = chk.getAttribute("data-field-id");
+      const dayIdx = parseInt(chk.getAttribute("data-day-idx"), 10);
+      const field = fields.find((f) => f.id === fieldId);
+      if (!field) return;
+      if (!Array.isArray(field.daysEnabled)) {
+        field.daysEnabled = [];
+      }
+      field.daysEnabled[dayIdx] = chk.checked;
+    });
+  });
+}
+
+// Inicialización: engancha las fechas del Paso 1 y hace el primer render
+function initScheduleDaysUI() {
+  const dateStartInput = document.getElementById("t-date-start");
+  const dateEndInput = document.getElementById("t-date-end");
+
+  if (dateStartInput) {
+    dateStartInput.addEventListener("change", () => {
+      const t = appState.currentTournament;
+      if (!t) return;
+      t.dateStart = dateStartInput.value || "";
+      renderDayConfigs();
+    });
+  }
+  if (dateEndInput) {
+    dateEndInput.addEventListener("change", () => {
+      const t = appState.currentTournament;
+      if (!t) return;
+      t.dateEnd = dateEndInput.value || "";
+      renderDayConfigs();
+    });
+  }
+
+  // Primera renderización al iniciar
+  renderDayConfigs();
+}
 
 function initFieldsSection() {
   const btnAddField = document.getElementById("btn-add-field");
@@ -1727,6 +2004,8 @@ function renderFieldsTable() {
       renderFieldsTable();
     });
   });
+  // Al actualizar la tabla de canchas, refrescamos la matriz de disponibilidad
+  renderFieldDaysMatrix();
 }
 
 function initBreaksSection() {
@@ -1776,17 +2055,18 @@ function initFixtureGeneration() {
         return;
       }
 
-      const scheduleOptions = {
+        const scheduleOptions = {
         dateStart: t.dateStart,
         dateEnd: t.dateEnd,
-        dayTimeMin: t.dayTimeMin,
-        dayTimeMax: t.dayTimeMax,
-        matchDurationMinutes: t.matchDurationMinutes,
-        restMinMinutes: t.restMinMinutes,
-        fields: t.fields,
-        breaks: t.breaks,
-        restrictions: t.format.restrictions,
+        dayTimeMin: t.schedule.dayTimeMin,
+        dayTimeMax: t.schedule.dayTimeMax,
+        matchDurationMinutes: t.schedule.matchDurationMinutes,
+        restMinMinutes: t.schedule.restMinMinutes,
+        breaks: t.schedule.breaks,
+        fields: t.schedule.fields,
+        dayConfigs: t.schedule.dayConfigs || [], // NUEVO
       };
+
 
               let matchesBase = [];
 
@@ -2554,7 +2834,7 @@ function renderTournamentsTable() {
     tbody.appendChild(tr);
   });
 
-  // Abrir torneo
+    // Abrir torneo
   tbody.querySelectorAll("[data-open]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-open");
@@ -2565,11 +2845,14 @@ function renderTournamentsTable() {
       renderTeamsTable();
       renderFieldsTable();
       renderBreaksList();
+      renderDayConfigs();        // NUEVO
+      renderFieldDaysMatrix();   // NUEVO
       renderFixtureResult();
       renderExportView("zone");
       closeTournamentsModal();
     });
   });
+
 
   // Duplicar torneo
   tbody.querySelectorAll("[data-duplicate]").forEach((btn) => {
