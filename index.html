@@ -236,6 +236,32 @@
               Horario máximo por día
               <input type="time" id="day-time-max" value="22:00" />
             </label>
+      <!-- NUEVO: calendario de días del torneo -->
+      <div class="card">
+        <h3>Días del torneo</h3>
+        <p class="card-subtitle">
+          A partir de la fecha de inicio y fin (Paso 1), se generan los días del torneo (Día 1, Día 2, etc.).
+          Acá podés marcar qué días son completos, medios o sin juego, y ajustar sus horarios.
+        </p>
+        <table class="data-table" id="schedule-days-table">
+          <thead>
+            <tr>
+              <th>Día</th>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Inicio</th>
+              <th>Fin</th>
+            </tr>
+          </thead>
+          <tbody id="schedule-days-body">
+            <!-- Se completa por JS -->
+          </tbody>
+        </table>
+        <p class="text-muted">
+          Si un día se marca como "No se juega", no se programarán partidos en esa fecha.
+          Para un "medio día", simplemente ajustá el horario de inicio/fin (ej. 09:00–13:00).
+        </p>
+      </div>
 
             <label>
               Duración del partido (minutos, incluyendo colchón)
@@ -281,6 +307,18 @@
               </table>
             </div>
           </div>
+      <!-- NUEVO: disponibilidad de canchas por día -->
+      <div class="card">
+        <h3>Disponibilidad de canchas por día</h3>
+        <p class="card-subtitle">
+          Indicá en qué días se puede usar cada cancha. Por defecto, todas las canchas están disponibles todos los días.
+        </p>
+        <div id="field-days-container">
+          <p class="text-muted">
+            Configurá primero las fechas del torneo (Paso 1) y las canchas (esta sección) para ver la matriz de disponibilidad.
+          </p>
+        </div>
+      </div>
 
           <h3>Cortes / ventanas (horas bloqueadas)</h3>
           <div class="panel-row">
