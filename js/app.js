@@ -1788,7 +1788,7 @@ function initFixtureGeneration() {
         restrictions: t.format.restrictions,
       };
 
-          let matchesBase = [];
+              let matchesBase = [];
 
       if (t.format.type === "liga") {
         const ids = t.teams.map((e) => e.id);
@@ -1819,20 +1819,23 @@ function initFixtureGeneration() {
           t,
           t.format.eliminacion.type
         );
-        // importante: zonas primero, luego playoffs por orden de ronda
         matchesBase = baseZonas.concat(playoffs);
       } else if (t.format.type === "especial-8x3") {
+        // FORMATO EVITA 8×3
         matchesBase = generarEspecial8x3(t);
         if (!matchesBase || !matchesBase.length) {
-          // generarEspecial8x3 ya muestra un mensaje explicando el problema
+          // generarEspecial8x3 ya muestra el error si algo está mal
           return;
         }
+        // NUEVO: orden especial para cumplir la lógica deportiva
+        matchesBase = ordenarMatchesEspecial8x3(matchesBase);
       } else if (t.format.type === "eliminacion") {
         const ids = t.teams.map((e) => e.id);
         matchesBase = generarLlavesEliminacion(ids, {
           type: t.format.eliminacion.type,
         });
       }
+
 
       // Renumeramos TODOS los partidos con IDs numéricos globales (1, 2, 3, ...)
       matchesBase = renumerarPartidosConIdsNumericos(matchesBase);
