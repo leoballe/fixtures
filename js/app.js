@@ -501,6 +501,83 @@ function generarPlayoffsDesdeZonas(t, elimType) {
 }
 
 // =====================
+//  ORDEN ESPECIAL EVITA 8×3
+// =====================
+
+function interleaveLists(lists) {
+  const result = [];
+  let remaining = true;
+  while (remaining) {
+    remaining = false;
+    for (const list of lists) {
+      if (list.length) {
+        result.push(list.shift());
+        remaining = true;
+      }
+    }
+  }
+  return result;
+}
+
+function ordenarMatchesEspecial8x3(matches) {
+  const fase1 = [];
+  const fase2 = [];
+  const puestos1_8 = [];
+  const p9_16_r1 = [];
+  const p9_16_r2 = [];
+  const p9_16_r3 = [];
+  const p17_24_r1 = [];
+  const p17_24_r2 = [];
+  const p17_24_r3 = [];
+  const otros = [];
+
+  matches.forEach((m) => {
+    const phase = m.phase || "";
+    if (phase.indexOf("Fase 1") !== -1) {
+      fase1.push(m);
+    } else if (phase.indexOf("Fase 2") !== -1) {
+      fase2.push(m);
+    } else if (phase === "Puestos 1-8") {
+      puestos1_8.push(m);
+    } else if (phase === "Puestos 9-16") {
+      if (m.round === 1) p9_16_r1.push(m);
+      else if (m.round === 2) p9_16_r2.push(m);
+      else p9_16_r3.push(m);
+    } else if (phase === "Puestos 17-24") {
+      if (m.round === 1) p17_24_r1.push(m);
+      else if (m.round === 2) p17_24_r2.push(m);
+      else p17_24_r3.push(m);
+    } else {
+      otros.push(m);
+    }
+  });
+
+  const bloqueMedio = interleaveLists([
+    fase2,
+    p9_16_r1,
+    p17_24_r1,
+  ]);
+
+  const bloqueSemis = interleaveLists([
+    p9_16_r2,
+    p17_24_r2,
+  ]);
+
+  const bloqueFinales = []
+    .concat(puestos1_8)
+    .concat(p9_16_r3)
+    .concat(p17_24_r3);
+
+  return []
+    .concat(fase1)
+    .concat(bloqueMedio)
+    .concat(bloqueSemis)
+    .concat(bloqueFinales)
+    .concat(otros);
+}
+
+
+// =====================
 //  SCHEDULER BÁSICO (ASIGNAR FECHAS / HORAS / CANCHAS)
 // =====================
 // =====================
