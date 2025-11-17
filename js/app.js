@@ -1227,10 +1227,23 @@ function asignarHorarios(matches, options) {
   const dur = options.matchDurationMinutes || 60;
   const rest = options.restMinMinutes || 0;
 
-  let fields =
-    Array.isArray(options.fields) && options.fields.length
-      ? options.fields.slice()
-      : [{ id: safeId("field"), name: "Cancha 1", maxMatchesPerDay: null }];
+  let fields;
+
+  if (Array.isArray(options.fields) && options.fields.length) {
+    // Caso ideal: las canchas vienen en options.fields
+    fields = options.fields.slice();
+  } else if (
+    appState.currentTournament &&
+    Array.isArray(appState.currentTournament.fields) &&
+    appState.currentTournament.fields.length
+  ) {
+    // Si no vinieron por options, usamos las canchas guardadas en el torneo
+    fields = appState.currentTournament.fields.slice();
+  } else {
+    // Último recurso: inventar una sola cancha genérica
+    fields = [{ id: safeId("field"), name: "Cancha 1", maxMatchesPerDay: null }];
+  }
+
 
   const cortes = Array.isArray(options.breaks)
     ? options.breaks
