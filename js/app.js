@@ -2197,7 +2197,9 @@ function initFixtureGeneration() {
           t.format.eliminacion.type
         );
         matchesBase = baseZonas.concat(playoffs);
-      } else if (t.format.type === "especial-8x3") {
+
+      
+      } else if (t.format.type === "especial-8x3") { 
         // Ahora el formato especial 8×3 se apoya en un "modelo Evita" interno
         matchesBase = generarPartidosDesdeModeloEvita(
           t,
@@ -2208,7 +2210,6 @@ function initFixtureGeneration() {
           return;
         }
       } else if (t.format.type === "eliminacion") {
-else if (t.format.type === "eliminacion") {
         const ids = t.teams.map((e) => e.id);
         matchesBase = generarLlavesEliminacion(ids, {
           type: t.format.eliminacion.type,
