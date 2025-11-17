@@ -2165,17 +2165,24 @@ function initFixtureGeneration() {
         return;
       }
 
-        const scheduleOptions = {
-        dateStart: t.dateStart,
-        dateEnd: t.dateEnd,
-        dayTimeMin: t.schedule.dayTimeMin,
-        dayTimeMax: t.schedule.dayTimeMax,
-        matchDurationMinutes: t.schedule.matchDurationMinutes,
-        restMinMinutes: t.schedule.restMinMinutes,
-        breaks: t.schedule.breaks,
-        fields: t.schedule.fields,
-        dayConfigs: t.schedule.dayConfigs || [], // NUEVO
-      };
+      const scheduleOptions = {
+  dateStart: t.dateStart,
+  dateEnd: t.dateEnd,
+
+  // Usamos SIEMPRE los valores actuales del torneo
+  dayTimeMin: t.dayTimeMin || "09:00",
+  dayTimeMax: t.dayTimeMax || "22:00",
+  matchDurationMinutes: t.matchDurationMinutes || 60,
+  restMinMinutes: t.restMinMinutes || 0,
+
+  // Cortes y canchas reales del torneo
+  breaks: t.breaks || [],
+  fields: t.fields || [],
+
+  // Configuración por día (tabla "Días del torneo")
+  dayConfigs: (t.schedule && t.schedule.dayConfigs) || [],
+};
+
 
 
               let matchesBase = [];
