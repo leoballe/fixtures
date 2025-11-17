@@ -1227,20 +1227,20 @@ function asignarHorarios(matches, options) {
   const dur = options.matchDurationMinutes || 60;
   const rest = options.restMinMinutes || 0;
 
-  let fields;
+ let fields;
 
   if (Array.isArray(options.fields) && options.fields.length) {
-    // Caso ideal: las canchas vienen en options.fields
+    // Caso ideal: las canchas vienen en options
     fields = options.fields.slice();
   } else if (
     appState.currentTournament &&
     Array.isArray(appState.currentTournament.fields) &&
     appState.currentTournament.fields.length
   ) {
-    // Si no vinieron por options, usamos las canchas guardadas en el torneo
+    // Si no vinieron por options, usamos las canchas del torneo actual
     fields = appState.currentTournament.fields.slice();
   } else {
-    // Último recurso: inventar una sola cancha genérica
+    // Último recurso: una sola cancha genérica
     fields = [{ id: safeId("field"), name: "Cancha 1", maxMatchesPerDay: null }];
   }
 
@@ -2165,7 +2165,7 @@ function initFixtureGeneration() {
         return;
       }
 
-      const scheduleOptions = {
+     const scheduleOptions = {
   dateStart: t.dateStart,
   dateEnd: t.dateEnd,
 
@@ -2179,9 +2179,10 @@ function initFixtureGeneration() {
   breaks: t.breaks || [],
   fields: t.fields || [],
 
-  // Configuración por día (tabla "Días del torneo")
+  // Configuración detallada de días (tabla "Días del torneo")
   dayConfigs: (t.schedule && t.schedule.dayConfigs) || [],
 };
+
 
 
 
@@ -2225,10 +2226,18 @@ function initFixtureGeneration() {
           t,
           "EVITA_24_8x3_NORMAL_5D_2C"
         );
+        
         if (!matchesBase || !matchesBase.length) {
           // generarPartidosDesdeModeloEvita ya muestra el problema si algo falla
           return;
         }
+           console.log(
+          "DEBUG ESPECIAL-8x3 → equipos:",
+          t.teams.length,
+          "partidos generados (antes de ordenar):",
+          matchesBase.length
+        );
+        
       } else if (t.format.type === "eliminacion") {
         const ids = t.teams.map((e) => e.id);
         matchesBase = generarLlavesEliminacion(ids, {
