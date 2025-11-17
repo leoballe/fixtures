@@ -2165,23 +2165,48 @@ function initFixtureGeneration() {
         return;
       }
 
-     const scheduleOptions = {
-  dateStart: t.dateStart,
-  dateEnd: t.dateEnd,
+         // Leemos SIEMPRE lo que está en los campos del Paso 4
+      const dayTimeMinInput = document.getElementById("day-time-min");
+      const dayTimeMaxInput = document.getElementById("day-time-max");
+      const matchDurationInput = document.getElementById("match-duration");
+      const restMinInput = document.getElementById("rest-min");
 
-  // Usamos SIEMPRE los valores actuales del torneo
-  dayTimeMin: t.dayTimeMin || "09:00",
-  dayTimeMax: t.dayTimeMax || "22:00",
-  matchDurationMinutes: t.matchDurationMinutes || 60,
-  restMinMinutes: t.restMinMinutes || 0,
+      const dayTimeMin =
+        (dayTimeMinInput && dayTimeMinInput.value) ||
+        t.dayTimeMin ||
+        "09:00";
+      const dayTimeMax =
+        (dayTimeMaxInput && dayTimeMaxInput.value) ||
+        t.dayTimeMax ||
+        "22:00";
+      const matchDurationMinutes = Number(
+        (matchDurationInput && matchDurationInput.value) ||
+          t.matchDurationMinutes ||
+          60
+      );
+      const restMinMinutes = Number(
+        (restMinInput && restMinInput.value) || t.restMinMinutes || 0
+      );
 
-  // Cortes y canchas reales del torneo
-  breaks: t.breaks || [],
-  fields: t.fields || [],
+      // De paso, sincronizamos con el torneo actual
+      t.dayTimeMin = dayTimeMin;
+      t.dayTimeMax = dayTimeMax;
+      t.matchDurationMinutes = matchDurationMinutes;
+      t.restMinMinutes = restMinMinutes;
+      upsertCurrentTournament();
 
-  // Configuración detallada de días (tabla "Días del torneo")
-  dayConfigs: (t.schedule && t.schedule.dayConfigs) || [],
-};
+      const scheduleOptions = {
+        dateStart: t.dateStart,
+        dateEnd: t.dateEnd,
+        dayTimeMin,
+        dayTimeMax,
+        matchDurationMinutes,
+        restMinMinutes,
+        fields: t.fields,
+        breaks: t.breaks,
+        restrictions: t.format.restrictions,
+      };
+
 
 
 
