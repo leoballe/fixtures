@@ -224,57 +224,63 @@
 
         <!-- STEP 4: FECHAS Y CANCHAS -->
         <section id="step-4" class="step-panel">
-          <h2>4. Fechas, horarios y canchas</h2>
+           <h2>4. Fechas, horarios y canchas</h2>
 
-          <div class="form-grid">
-            <label>
-              Horario mínimo por día
-              <input type="time" id="day-time-min" value="09:00" />
-            </label>
+          <!-- Card: horarios generales y duración -->
+          <div class="card">
+            <h3>Horarios generales y duración</h3>
+            <div class="form-grid">
+              <label>
+                Horario mínimo por día
+                <input type="time" id="day-time-min" value="09:00" />
+              </label>
 
-            <label>
-              Horario máximo por día
-              <input type="time" id="day-time-max" value="22:00" />
-            </label>
-      <!-- NUEVO: calendario de días del torneo -->
-      <div class="card">
-        <h3>Días del torneo</h3>
-        <p class="card-subtitle">
-          A partir de la fecha de inicio y fin (Paso 1), se generan los días del torneo (Día 1, Día 2, etc.).
-          Acá podés marcar qué días son completos, medios o sin juego, y ajustar sus horarios.
-        </p>
-        <table class="data-table" id="schedule-days-table">
-          <thead>
-            <tr>
-              <th>Día</th>
-              <th>Fecha</th>
-              <th>Tipo</th>
-              <th>Inicio</th>
-              <th>Fin</th>
-            </tr>
-          </thead>
-          <tbody id="schedule-days-body">
-            <!-- Se completa por JS -->
-          </tbody>
-        </table>
-        <p class="text-muted">
-          Si un día se marca como "No se juega", no se programarán partidos en esa fecha.
-          Para un "medio día", simplemente ajustá el horario de inicio/fin (ej. 09:00–13:00).
-        </p>
-      </div>
+              <label>
+                Horario máximo por día
+                <input type="time" id="day-time-max" value="22:00" />
+              </label>
 
-            <label>
-              Duración del partido (minutos, incluyendo colchón)
-              <input type="number" id="match-duration" min="10" step="5" value="60" />
-            </label>
+              <label>
+                Duración del partido (minutos, incluyendo colchón)
+                <input type="number" id="match-duration" min="10" step="5" value="60" />
+              </label>
 
-            <label>
-              Descanso mínimo entre partidos del mismo equipo (minutos)
-              <input type="number" id="rest-min" min="0" step="5" value="90" />
-            </label>
+              <label>
+                Descanso mínimo entre partidos del mismo equipo (minutos)
+                <input type="number" id="rest-min" min="0" step="5" value="90" />
+              </label>
+            </div>
+          </div>
+
+          <!-- Card: calendario de días del torneo -->
+          <div class="card">
+            <h3>Días del torneo</h3>
+            <p class="card-subtitle">
+              A partir de la fecha de inicio y fin (Paso 1), se generan los días del torneo (Día 1, Día 2, etc.).
+              Acá podés marcar qué días son completos, medios o sin juego, y ajustar sus horarios.
+            </p>
+            <table class="data-table" id="schedule-days-table">
+              <thead>
+                <tr>
+                  <th>Día</th>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Inicio</th>
+                  <th>Fin</th>
+                </tr>
+              </thead>
+              <tbody id="schedule-days-body">
+                <!-- Se completa por JS -->
+              </tbody>
+            </table>
+            <p class="text-muted">
+              Si un día se marca como "No se juega", no se programarán partidos en esa fecha.
+              Para un "medio día", simplemente ajustá el horario de inicio/fin (ej. 09:00–13:00).
+            </p>
           </div>
 
           <h3>Canchas / sedes</h3>
+
           <div class="panel-row">
             <div class="panel-col">
               <div class="form-grid">
