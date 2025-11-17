@@ -8,6 +8,103 @@
 // =====================
 //  ESTADO GLOBAL
 // =====================
+// =====================
+// MODELOS EVITA (24 equipos)
+// =====================
+
+const EVITA_MODELS = {
+  EVITA_24_8x3_NORMAL_5D_2C: {
+    id: "EVITA_24_8x3_NORMAL_5D_2C",
+    nombre: "24 equipos · 8×3 · 5 días · 2 canchas (normal)",
+    descripcion:
+      "Modelo Evita con 8 zonas de 3 equipos, fase de zonas, grupos A1/A2 y definición de puestos 1 al 24.",
+
+    // Metadatos básicos del modelo
+    meta: {
+      equiposEsperados: 24,
+      estructuraZonas: "8x3",        // 8 zonas de 3
+      diasRecomendados: 5,
+      canchasRecomendadas: 2,
+      // En el futuro podemos usar esto para advertir si faltan/e sobran equipos, días, etc.
+    },
+
+    // Fases deportivas declaradas (todavía no se usan al 100%, pero nos sirven como "mapa")
+    fases: [
+      {
+        id: "F1_ZONAS",
+        tipo: "zonas-roundrobin",
+        etiqueta: "Fase 1 · Zonas 8×3",
+      },
+      {
+        id: "F2_A1A2",
+        tipo: "grupos-1ros",
+        etiqueta: "Fase 2 · A1 y A2 (1° de zonas)",
+      },
+      {
+        id: "F3_9_16",
+        tipo: "llaves-2dos",
+        etiqueta: "Puestos 9 a 16 (2° de zonas)",
+      },
+      {
+        id: "F4_17_24",
+        tipo: "llaves-3ros",
+        etiqueta: "Puestos 17 a 24 (3° de zonas)",
+      },
+      {
+        id: "F5_1_8",
+        tipo: "finales-1-8",
+        etiqueta: "Puestos 1 a 8 (1°–4°)",
+      },
+    ],
+
+    // Pistas de programación por bloques (zonas al inicio, finales al final, etc.)
+    programacion: {
+      bloques: [
+        {
+          id: "BLOQUE_ZONAS",
+          fases: ["F1_ZONAS"],
+          rangoDiasSugerido: { desde: 1, hasta: 3 }, // toda la fase regular entre día 1 y 3
+        },
+        {
+          id: "BLOQUE_INTERMEDIO",
+          fases: ["F2_A1A2", "F3_9_16", "F4_17_24"],
+          rangoDiasSugerido: { desde: 3, hasta: 4 },
+        },
+        {
+          id: "BLOQUE_FINALES",
+          fases: ["F5_1_8", "F3_9_16", "F4_17_24"],
+          rangoDiasSugerido: { desde: 4, hasta: 5 }, // finales de todo al cierre
+        },
+      ],
+    },
+  },
+};
+// Generador base para modelos Evita
+// Por ahora, para el modelo 24 equipos 8×3 usamos la lógica que ya tenés
+function generarPartidosDesdeModeloEvita(torneo, modeloId) {
+  const modelo = EVITA_MODELS[modeloId];
+  if (!modelo) {
+    console.warn("Modelo Evita no encontrado:", modeloId);
+    return [];
+  }
+
+  // En esta primera etapa, el único modelo soportado es 24 equipos · 8×3
+  if (modeloId === "EVITA_24_8x3_NORMAL_5D_2C") {
+    // IMPORTANTE:
+    // - generarEspecial8x3(torneo) ya arma: zonas, A1/A2, 9–16, 17–24, 1–8
+    // - ordenarMatchesEspecial8x3(...) los ordena "al estilo Evita" (zonas primero, finales al final)
+    const base = generarEspecial8x3(torneo);
+    if (!base || !base.length) return [];
+    return ordenarMatchesEspecial8x3(base);
+  }
+
+  // Para otros modelos que agreguemos más adelante:
+  console.warn(
+    "El modelo Evita está definido pero aún no tiene generador específico:",
+    modeloId
+  );
+  return [];
+}
 
 const appState = {
   currentTournament: null,
@@ -2101,15 +2198,17 @@ function initFixtureGeneration() {
         );
         matchesBase = baseZonas.concat(playoffs);
       } else if (t.format.type === "especial-8x3") {
-        // FORMATO EVITA 8×3
-        matchesBase = generarEspecial8x3(t);
+        // Ahora el formato especial 8×3 se apoya en un "modelo Evita" interno
+        matchesBase = generarPartidosDesdeModeloEvita(
+          t,
+          "EVITA_24_8x3_NORMAL_5D_2C"
+        );
         if (!matchesBase || !matchesBase.length) {
-          // generarEspecial8x3 ya muestra el error si algo está mal
+          // generarPartidosDesdeModeloEvita ya muestra el problema si algo falla
           return;
         }
-        // NUEVO: orden especial para cumplir la lógica deportiva
-        matchesBase = ordenarMatchesEspecial8x3(matchesBase);
       } else if (t.format.type === "eliminacion") {
+else if (t.format.type === "eliminacion") {
         const ids = t.teams.map((e) => e.id);
         matchesBase = generarLlavesEliminacion(ids, {
           type: t.format.eliminacion.type,
