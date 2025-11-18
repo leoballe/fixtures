@@ -1949,59 +1949,6 @@ function initFormatSection() {
   refreshFormatPanels();
 }
 
-// =====================
-//  STEP 4: CANCHAS / CORTES / HORARIOS
-// =====================
-// =====================
-//  CALENDARIO DE DÍAS DEL TORNEO + DISPONIBILIDAD POR CANCHA
-// =====================
-
-function ensureDayConfigs(t) {
-  if (!t) return;
-  if (!t.schedule) t.schedule = {};
-
-  const dateStart = dateStrToDate(t.dateStart);
-  const dateEnd = dateStrToDate(t.dateEnd);
-  if (!dateStart || !dateEnd || dateEnd < dateStart) {
-    t.schedule.dayConfigs = [];
-    return;
-  }
-
-  const prev = Array.isArray(t.schedule.dayConfigs)
-    ? t.schedule.dayConfigs
-    : [];
-
-  const list = [];
-  let idx = 0;
-  for (
-    let d = new Date(dateStart.getTime());
-    d <= dateEnd;
-    d = addDays(d, 1), idx++
-  ) {
-    const dateStr = formatDate(d);
-    const existing = prev.find((dc) => dc.date === dateStr);
-    if (existing) {
-      existing.index = idx + 1;
-      if (!existing.type) existing.type = "full";
-      if (!existing.timeMin)
-        existing.timeMin = t.schedule.dayTimeMin || "09:00";
-      if (!existing.timeMax)
-        existing.timeMax = t.schedule.dayTimeMax || "22:00";
-      list.push(existing);
-    } else {
-      list.push({
-        index: idx + 1,
-        date: dateStr,
-        type: "full",
-        timeMin: t.schedule.dayTimeMin || "09:00",
-        timeMax: t.schedule.dayTimeMax || "22:00",
-      });
-    }
-  }
-
-  t.schedule.dayConfigs = list;
-}
-
 function renderDayConfigs() {
   const t = appState.currentTournament;
   if (!t) return;
@@ -2095,7 +2042,7 @@ function renderFieldDaysMatrix() {
   if (!container) return;
 
   const dayConfigs = (t.schedule && t.schedule.dayConfigs) || [];
-  const fields = (t.schedule && t.schedule.fields) || [];
+  const fields = t.fields || [];
 
   if (!dayConfigs.length || !fields.length) {
     container.innerHTML =
@@ -2157,9 +2104,13 @@ function renderFieldDaysMatrix() {
         field.daysEnabled = [];
       }
       field.daysEnabled[dayIdx] = chk.checked;
+      if (typeof upsertCurrentTournament === "function") {
+        upsertCurrentTournament();
+      }
     });
   });
 }
+
 
 // Engancha cambios de fechas del Paso 1, genera los días
 // y refresca la tabla + la matriz de canchas.
@@ -2312,8 +2263,8 @@ function renderBreaksList() {
   if (!ul) return;
   const t = appState.currentTournament;
   if (!t) return;
-  
-    ul.innerHTML = ""; // 👉 limpiar antes de volver a pintar
+
+  ul.innerHTML = ""; // limpiar antes de repintar
 
   t.breaks.forEach((b, idx) => {
     const li = document.createElement("li");
@@ -2321,6 +2272,7 @@ function renderBreaksList() {
     ul.appendChild(li);
   });
 }
+
 
 // =====================
 //  STEP 5: GENERAR FIXTURE
