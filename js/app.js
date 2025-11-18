@@ -1605,69 +1605,55 @@ function asignarHorarios(matches, options) {
     usedPerFieldDay[field.id] = new Array(numDays).fill(0);
   });
 
-  // Ventanas de días por fase (solo para especial 8×3)
-   function getPhaseDayWindow(match, strict) {
-    // Si no estamos en modo Evita o no queremos ser estrictos,
-    // no limitamos por fase.
-    if (!strict || !isEvita || numDays <= 1) {
-      return { min: 0, max: numDays - 1 };
-    }
-
-    const phase = (match.phase || "").toLowerCase();
-
-    // ==============================
-    // FASE 1 · ZONAS (8×3)
-    // → concentrar en Días 1 y 2
-    // ==============================
-    if (phase.includes("fase 1")) {
-      const max = Math.min(1, numDays - 1); // índices 0 y 1 ⇒ Días 1 y 2
-      return { min: 0, max };
-    }
-
-    // ======================================
-    // FASE 2 · ZONAS A1 / A2 (1° de zonas)
-    // → a partir del Día 3
-    // ======================================
-    if (phase.includes("fase 2")) {
-      if (numDays < 3) {
-        // Si el torneo tiene menos de 3 días, no podemos aplicar la regla
-        return { min: 0, max: numDays - 1 };
-      }
-      const min = 2; // índice 2 ⇒ Día 3
-      return { min, max: numDays - 1 };
-    }
-
-    // ============================================
-    // LLAVES "B" y "C": PUESTOS 9–16 y 17–24
-    // → también a partir del Día 3
-    // ============================================
-    if (phase.startsWith("puestos 9-16") || phase.startsWith("puestos 17-24")) {
-      if (numDays < 3) {
-        return { min: 0, max: numDays - 1 };
-      }
-      const min = 2; // Día 3
-      return { min, max: numDays - 1 };
-    }
-
-    // =====================================
-    // PUESTOS 1–8 (finales principales)
-    // → un poco más tarde:
-    //    - si hay ≥4 días: desde Día 4
-    //    - si hay 3 días: desde Día 3
-    // =====================================
-    if (phase.startsWith("puestos 1-8")) {
-      if (numDays >= 4) {
-        return { min: 3, max: numDays - 1 }; // índice 3 ⇒ Día 4 en adelante
-      } else if (numDays >= 3) {
-        return { min: 2, max: numDays - 1 }; // con 3 días, desde el Día 3
-      } else {
-        return { min: 0, max: numDays - 1 };
-      }
-    }
-
-    // Otros partidos (por si aparece algo raro)
+  function getPhaseDayWindow(match, strict) {
+  if (!strict || !isEvita || numDays <= 1) {
     return { min: 0, max: numDays - 1 };
   }
+
+  const phase = (match.phase || "").toLowerCase();
+
+  // ==============================
+  // FASE 1 · ZONAS (8×3)
+  // → concentrar en Días 1 y 2
+  // ==============================
+  if (phase.includes("fase 1")) {
+    // incluso R3 de Fase 1
+    return { min: 0, max: Math.min(1, numDays - 1) };
+  }
+
+  // ======================================
+  // FASE 2 · ZONAS A1 / A2 (1° de zonas)
+  // → desde Día 3
+  // ======================================
+  if (phase.includes("fase 2")) {
+    const min = numDays >= 3 ? 2 : 0;
+    return { min, max: numDays - 1 };
+  }
+
+  // ============================================
+  // LLAVES B y C: PUESTOS 9–16 y 17–24
+  // → también desde Día 3
+  // ============================================
+  if (
+    phase.startsWith("puestos 9-16") ||
+    phase.startsWith("puestos 17-24")
+  ) {
+    const min = numDays >= 3 ? 2 : 0;
+    return { min, max: numDays - 1 };
+  }
+
+  // =====================================
+  // LLAVE PRINCIPAL: PUESTOS 1–8
+  // → desde Día 4 si hay margen
+  // =====================================
+  if (phase.startsWith("puestos 1-8")) {
+    const min =
+      numDays >= 4 ? 3 : numDays >= 3 ? 2 : 0;
+    return { min, max: numDays - 1 };
+  }
+
+  return { min: 0, max: numDays - 1 };
+}
 
 
   // Elegir el mejor slot para un partido
