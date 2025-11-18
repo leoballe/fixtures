@@ -1427,21 +1427,6 @@ function asignarHorarios(matches, options) {
   const dur = options.matchDurationMinutes || 60;
   const rest = options.restMinMinutes || 0;
 
-  // Detectamos si estamos en el modelo Evita 24 equipos 8×3
-  const isEvita = matches.some((m) => {
-    const phase = (m.phase || "").toLowerCase();
-    const zone = (m.zone || "").toLowerCase();
-    return (
-      phase.includes("fase 1") ||
-      phase.includes("fase 2") ||
-      phase.includes("puestos 1-8") ||
-      phase.includes("puestos 9-16") ||
-      phase.includes("puestos 17-24") ||
-      zone === "zona a1" ||
-      zone === "zona a2"
-    );
-  });
-
   // =====================
   //  CANCHAS
   // =====================
@@ -1473,7 +1458,7 @@ function asignarHorarios(matches, options) {
     : [];
 
   // =====================
-  //  SLOTS DISPONIBLES
+  //  SLOTS DISPONIBLES (día × hora × cancha)
   // =====================
   const slots = [];
   let numDays = 0;
@@ -1522,7 +1507,7 @@ function asignarHorarios(matches, options) {
       }
     });
   } else {
-    // Fallback: rango global por fechas si no tenemos dayConfigs
+    // Fallback: rango global si no hay dayConfigs
     const dateStartObj = options.dateStart
       ? dateStrToDate(options.dateStart)
       : null;
@@ -1582,73 +1567,95 @@ function asignarHorarios(matches, options) {
     return matches;
   }
 
-  // Ordenamos slots por tiempo absoluto por las dudas
+  // Orden cronológico de slots
   slots.sort((a, b) => a.absoluteStart - b.absoluteStart);
 
+  // =====================
+  //  CONTROLES DE USO
+  // =====================
   const used = new Array(slots.length).fill(false);
-  const lastEnd = {}; // último final por equipo
+  const lastEnd = {}; // último final por equipo (minutos absolutos)
+  const usedPerFieldDay = {}; // clave: fieldId|dayIndex
+
+  // Detectar si es modelo Evita 24×8×3
+  const isEvita = matches.some((m) => {
+    const phase = (m.phase || "").toLowerCase();
+    const zone = (m.zone || "").toLowerCase();
+    return (
+      phase.includes("fase 1") ||
+      phase.includes("fase 2") ||
+      phase.includes("puestos 1-8") ||
+      phase.includes("puestos 9-16") ||
+      phase.includes("puestos 17-24") ||
+      zone === "zona a1" ||
+      zone === "zona a2"
+    );
+  });
+
+  const lastDayIndex = Math.max(0, numDays - 1);
 
   // =====================
-  //  VENTANAS POR FASE (Evita)
+  //  VENTANAS DE DÍAS POR FASE (Evita)
   // =====================
-  function getPhaseDayWindow(m, numDays) {
-    const lastIndex = Math.max(0, numDays - 1);
-    if (!isEvita || numDays < 3) {
-      return { minDay: 0, maxDay: lastIndex };
+  function getPhaseDayWindowStrict(m) {
+    if (!isEvita || numDays === 0) {
+      return { minDay: 0, maxDay: lastDayIndex, strict: false };
     }
 
     const phase = (m.phase || "").toLowerCase();
     const zone = (m.zone || "").toLowerCase();
 
-    // Fase 1: SOLO días 1-2
-    if (phase.includes("fase 1")) {
+    // FASE 1 · ZONAS (8×3) → días 1–2
+    if (phase.indexOf("fase 1") !== -1) {
       return {
         minDay: 0,
-        maxDay: Math.min(1, lastIndex),
+        maxDay: Math.min(1, lastDayIndex),
+        strict: true,
       };
     }
 
-    // Fase 2 (A1/A2): a partir del día 3 (días 3-4)
+    // FASE 2 · A1 / A2 → días 3–4
     if (
-      phase.includes("fase 2") ||
+      phase.indexOf("fase 2") !== -1 ||
       zone === "zona a1" ||
       zone === "zona a2"
     ) {
-      const min = Math.min(2, lastIndex);
-      const max = Math.min(3, lastIndex);
-      return { minDay: min, maxDay: max };
+      const min = Math.min(2, lastDayIndex);
+      const max = Math.min(3, lastDayIndex);
+      return { minDay: min, maxDay: max, strict: true };
     }
 
-    // Puestos 9-16 y 17-24: días 3-5 (o hasta el final si hay menos)
+    // PUESTOS 9–16 / 17–24 → días 3–5
     if (
       phase.indexOf("puestos 9-16") !== -1 ||
       phase.indexOf("puestos 17-24") !== -1
     ) {
-      const min = Math.min(2, lastIndex);
-      const max = Math.min(4, lastIndex);
-      return { minDay: min, maxDay: max };
+      const min = Math.min(2, lastDayIndex);
+      const max = Math.min(4, lastDayIndex);
+      return { minDay: min, maxDay: max, strict: true };
     }
 
-    // Puestos 1-8: desde día 4 en adelante
+    // PUESTOS 1–8 → desde día 4 en adelante
     if (phase.indexOf("puestos 1-8") !== -1) {
-      const min = Math.min(3, lastIndex);
-      return { minDay: min, maxDay: lastIndex };
+      const min = Math.min(3, lastDayIndex);
+      return { minDay: min, maxDay: lastDayIndex, strict: true };
     }
 
-    // Cualquier otra cosa: sin restricciones especiales
-    return { minDay: 0, maxDay: lastIndex };
+    // Cualquier otra fase → sin restricciones especiales
+    return { minDay: 0, maxDay: lastDayIndex, strict: false };
   }
 
   // =====================
-  //  ELECCIÓN DEL MEJOR SLOT (maximo descanso)
+  //  ELECCIÓN DE SLOT EN UNA VENTANA
+  //  (maximiza descanso entre partidos del mismo equipo)
   // =====================
-  function chooseSlotForMatch(m) {
+  function chooseSlotInWindow(m, minDay, maxDay) {
     const home = m.homeTeamId;
     const away = m.awayTeamId;
 
-    const window = getPhaseDayWindow(m, numDays);
     let bestIndex = -1;
     let bestRestScore = -Infinity;
+    let bestStartAbs = Infinity;
 
     for (let i = 0; i < slots.length; i++) {
       if (used[i]) continue;
@@ -1656,61 +1663,94 @@ function asignarHorarios(matches, options) {
 
       if (
         typeof s.dayIndex === "number" &&
-        (s.dayIndex < window.minDay || s.dayIndex > window.maxDay)
+        (s.dayIndex < minDay || s.dayIndex > maxDay)
       ) {
         continue;
       }
 
       const startAbs = s.absoluteStart;
-      const endAbs = s.absoluteStart + dur;
+      const endAbs = startAbs + dur;
 
       let restScore = Number.POSITIVE_INFINITY;
+      let feasible = true;
 
       if (home) {
-        const lastH = lastEnd[home] ?? -Infinity;
-        const diffH = startAbs - lastH;
-        if (diffH < rest) continue;
-        restScore = Math.min(restScore, diffH);
-      }
-      if (away) {
-        const lastA = lastEnd[away] ?? -Infinity;
-        const diffA = startAbs - lastA;
-        if (diffA < rest) continue;
-        restScore = Math.min(restScore, diffA);
+        const lastH = lastEnd[home];
+        if (typeof lastH === "number") {
+          const diffH = startAbs - lastH;
+          if (diffH < rest) {
+            feasible = false;
+          } else {
+            restScore = Math.min(restScore, diffH);
+          }
+        }
       }
 
-      // Queremos la MAYOR separación posible entre partidos del mismo equipo.
+      if (away && feasible) {
+        const lastA = lastEnd[away];
+        if (typeof lastA === "number") {
+          const diffA = startAbs - lastA;
+          if (diffA < rest) {
+            feasible = false;
+          } else {
+            restScore = Math.min(restScore, diffA);
+          }
+        }
+      }
+
+      if (!feasible) continue;
+
+      // Si no hay partidos previos de ninguno, restScore queda en +∞
+      // y priorizamos el slot más temprano.
       if (
         restScore > bestRestScore ||
-        (restScore === bestRestScore &&
-          bestIndex >= 0 &&
-          s.absoluteStart < slots[bestIndex].absoluteStart)
+        (restScore === bestRestScore && startAbs < bestStartAbs)
       ) {
         bestRestScore = restScore;
+        bestStartAbs = startAbs;
         bestIndex = i;
       }
     }
 
-    if (bestIndex === -1) return null;
-
-    const chosenSlot = slots[bestIndex];
-    used[bestIndex] = true;
-
-    const endAbs = chosenSlot.absoluteStart + dur;
-    if (home) lastEnd[home] = endAbs;
-    if (away) lastEnd[away] = endAbs;
-
-    return chosenSlot;
+    return bestIndex;
   }
 
   // =====================
-  //  PROGRAMACIÓN
+  //  ELECCIÓN FINAL DE SLOT (con ventana + extensión si hace falta)
+  // =====================
+  function chooseSlotForMatch(m) {
+    const baseWindow = getPhaseDayWindowStrict(m);
+
+    // 1) Intento en ventana "ideal"
+    let idx = chooseSlotInWindow(m, baseWindow.minDay, baseWindow.maxDay);
+    if (idx !== -1 || !baseWindow.strict) {
+      return idx;
+    }
+
+    // 2) Si no entra en su ventana ideal, extendemos hacia adelante
+    for (
+      let maxDay = baseWindow.maxDay + 1;
+      maxDay <= lastDayIndex;
+      maxDay++
+    ) {
+      idx = chooseSlotInWindow(m, baseWindow.minDay, maxDay);
+      if (idx !== -1) {
+        return idx;
+      }
+    }
+
+    // 3) Último recurso: ignorar ventanas y usar cualquier día
+    return chooseSlotInWindow(m, 0, lastDayIndex);
+  }
+
+  // =====================
+  //  PROGRAMACIÓN FINAL
   // =====================
   const scheduled = matches.map((m) => {
-    const slot = chooseSlotForMatch(m);
+    const slotIndex = chooseSlotForMatch(m);
 
-    if (!slot) {
-      // No encontró slot dentro de su ventana: lo dejamos sin programar
+    if (slotIndex === -1) {
+      // No encontró ningún slot razonable
       return Object.assign({}, m, {
         date: null,
         time: null,
@@ -1718,15 +1758,35 @@ function asignarHorarios(matches, options) {
       });
     }
 
+    const s = slots[slotIndex];
+    used[slotIndex] = true;
+
+    const endAbs = s.absoluteStart + dur;
+    if (m.homeTeamId) {
+      lastEnd[m.homeTeamId] = endAbs;
+    }
+    if (m.awayTeamId) {
+      lastEnd[m.awayTeamId] = endAbs;
+    }
+
+    const keyFD =
+      s.fieldId && typeof s.dayIndex === "number"
+        ? s.fieldId + "|" + s.dayIndex
+        : null;
+    if (keyFD) {
+      usedPerFieldDay[keyFD] = (usedPerFieldDay[keyFD] || 0) + 1;
+    }
+
     return Object.assign({}, m, {
-      date: slot.date,
-      time: minutesToTimeStr(slot.startMinutes),
-      fieldId: slot.fieldId,
+      date: s.date,
+      time: minutesToTimeStr(s.startMinutes),
+      fieldId: s.fieldId,
     });
   });
 
   return scheduled;
 }
+
 
 
 
@@ -2506,7 +2566,7 @@ function initFixtureGeneration() {
           ? t.schedule.dayConfigs
           : []);
 
-   const scheduleOptions = {
+const scheduleOptions = {
   dateStart: t.dateStart,
   dateEnd: t.dateEnd,
   dayTimeMin,
@@ -2516,11 +2576,12 @@ function initFixtureGeneration() {
   fields: t.fields || [],
   breaks: t.breaks || [],
   restrictions: t.format ? t.format.restrictions : null,
-    dayConfigs:
-          t.schedule && Array.isArray(t.schedule.dayConfigs)
-            ? t.schedule.dayConfigs
-            : [],
+  dayConfigs:
+    t.schedule && Array.isArray(t.schedule.dayConfigs)
+      ? t.schedule.dayConfigs
+      : [],
 };
+
 
     let matchesBase = [];
 
