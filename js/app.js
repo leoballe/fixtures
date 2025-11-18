@@ -2312,6 +2312,9 @@ function renderBreaksList() {
   if (!ul) return;
   const t = appState.currentTournament;
   if (!t) return;
+  
+    ul.innerHTML = ""; // 👉 limpiar antes de volver a pintar
+
   t.breaks.forEach((b, idx) => {
     const li = document.createElement("li");
     li.textContent = "Corte " + (idx + 1) + ": " + b.from + "–" + b.to;
@@ -2325,129 +2328,144 @@ function renderBreaksList() {
 
 function initFixtureGeneration() {
   const btn = document.getElementById("btn-generate-fixture");
-  btn &&
-    btn.addEventListener("click", () => {
-      const t = appState.currentTournament;
-      if (!t) return;
-      if (!t.teams.length) {
-        alert("Primero cargá equipos.");
+  if (!btn) return;
+
+  btn.addEventListener("click", () => {
+    const t = appState.currentTournament;
+    if (!t) return;
+
+    if (!t.teams.length) {
+      alert("Primero cargá equipos.");
+      return;
+    }
+
+    // 👉 NUEVO: tomamos los inputs del Paso 4
+    const dayTimeMinInput = document.getElementById("day-time-min");
+    const dayTimeMaxInput = document.getElementById("day-time-max");
+    const matchDurationInput = document.getElementById("match-duration");
+    const restMinInput = document.getElementById("rest-min");
+
+    const dayTimeMin =
+      (dayTimeMinInput && dayTimeMinInput.value) ||
+      t.dayTimeMin ||
+      "09:00";
+
+    const dayTimeMax =
+      (dayTimeMaxInput && dayTimeMaxInput.value) ||
+      t.dayTimeMax ||
+      "22:00";
+
+    const matchDurationMinutes = Number(
+      (matchDurationInput && matchDurationInput.value) ||
+        t.matchDurationMinutes ||
+        60
+    );
+
+    const restMinMinutes = Number(
+      (restMinInput && restMinInput.value) ||
+        t.restMinMinutes ||
+        0
+    );
+
+    // Actualizamos el torneo con esos valores
+    t.dayTimeMin = dayTimeMin;
+    t.dayTimeMax = dayTimeMax;
+    t.matchDurationMinutes = matchDurationMinutes;
+    t.restMinMinutes = restMinMinutes;
+
+    // 👉 NUEVO: puente entre t.dayConfigs y t.schedule.dayConfigs
+    const dayConfigsFromState =
+      (Array.isArray(t.dayConfigs) && t.dayConfigs.length)
+        ? t.dayConfigs
+        : (t.schedule &&
+           Array.isArray(t.schedule.dayConfigs) &&
+           t.schedule.dayConfigs.length
+          ? t.schedule.dayConfigs
+          : []);
+
+    const scheduleOptions = {
+      dateStart: t.dateStart,
+      dateEnd: t.dateEnd,
+      dayTimeMin,
+      dayTimeMax,
+      matchDurationMinutes,
+      restMinMinutes,
+      fields: t.fields || [],
+      breaks: t.breaks || [],
+      restrictions: t.format ? t.format.restrictions : null,
+      // 👉 acá entran los "Día 1, Día 2..."
+      dayConfigs: dayConfigsFromState,
+    };
+
+    let matchesBase = [];
+
+    if (t.format.type === "liga") {
+      const ids = t.teams.map((e) => e.id);
+      matchesBase = generarFixtureLiga(ids, {
+        idaVuelta: t.format.liga.rounds === "ida-vuelta",
+      });
+    } else if (t.format.type === "zonas") {
+      const zonesMap = {};
+      t.teams.forEach((team) => {
+        const key = team.zone || "Zona";
+        if (!zonesMap[key]) zonesMap[key] = [];
+        zonesMap[key].push(team.id);
+      });
+      matchesBase = generarFixtureZonas(zonesMap, {
+        idaVuelta: t.format.liga.rounds === "ida-vuelta",
+      });
+    } else if (t.format.type === "zonas-playoffs") {
+      const zonesMap = {};
+      t.teams.forEach((team) => {
+        const key = team.zone || "Zona";
+        if (!zonesMap[key]) zonesMap[key] = [];
+        zonesMap[key].push(team.id);
+      });
+      const baseZonas = generarFixtureZonas(zonesMap, {
+        idaVuelta: t.format.liga.rounds === "ida-vuelta",
+      });
+      const playoffs = generarPlayoffsDesdeZonas(
+        t,
+        t.format.eliminacion.type
+      );
+      matchesBase = baseZonas.concat(playoffs);
+    } else if (t.format.type === "especial-8x3") {
+      // Formato especial 24 equipos · 8×3 (modelo Evita)
+      matchesBase = generarPartidosDesdeModeloEvita(
+        t,
+        "EVITA_24_8x3_NORMAL_5D_2C"
+      );
+
+      if (!matchesBase || !matchesBase.length) {
+        // generarPartidosDesdeModeloEvita ya avisa si algo falla
         return;
       }
 
-        
-
-      const dayTimeMin =
-        (dayTimeMinInput && dayTimeMinInput.value) ||
-        t.dayTimeMin ||
-        "09:00";
-      const dayTimeMax =
-        (dayTimeMaxInput && dayTimeMaxInput.value) ||
-        t.dayTimeMax ||
-        "22:00";
-      const matchDurationMinutes = Number(
-        (matchDurationInput && matchDurationInput.value) ||
-          t.matchDurationMinutes ||
-          60
+      console.log(
+        "DEBUG ESPECIAL-8x3 → equipos:",
+        t.teams.length,
+        "partidos generados (antes de ordenar):",
+        matchesBase.length
       );
-      const restMinMinutes = Number(
-        (restMinInput && restMinInput.value) || t.restMinMinutes || 0
-      );
+    } else if (t.format.type === "eliminacion") {
+      const ids = t.teams.map((e) => e.id);
+      matchesBase = generarLlavesEliminacion(ids, {
+        type: t.format.eliminacion.type,
+      });
+    }
 
-      // Actualizamos el torneo con esos valores
-      t.dayTimeMin = dayTimeMin;
-      t.dayTimeMax = dayTimeMax;
-      t.matchDurationMinutes = matchDurationMinutes;
-      t.restMinMinutes = restMinMinutes;
+    // IDs numéricos globales
+    matchesBase = renumerarPartidosConIdsNumericos(matchesBase);
 
-      const scheduleOptions = {
-        dateStart: t.dateStart,
-        dateEnd: t.dateEnd,
-        dayTimeMin,
-        dayTimeMax,
-        matchDurationMinutes,
-        restMinMinutes,
-        fields: t.fields || [],
-        breaks: t.breaks || [],
-        restrictions: t.format ? t.format.restrictions : null,
-        dayConfigs: t.dayConfigs || [], // 👉 acá entran los "Día 1, Día 2..."
-      };
-
-
-
-
-
-
-              let matchesBase = [];
-
-      if (t.format.type === "liga") {
-        const ids = t.teams.map((e) => e.id);
-        matchesBase = generarFixtureLiga(ids, {
-          idaVuelta: t.format.liga.rounds === "ida-vuelta",
-        });
-      } else if (t.format.type === "zonas") {
-        const zonesMap = {};
-        t.teams.forEach((team) => {
-          const key = team.zone || "Zona";
-          if (!zonesMap[key]) zonesMap[key] = [];
-          zonesMap[key].push(team.id);
-        });
-        matchesBase = generarFixtureZonas(zonesMap, {
-          idaVuelta: t.format.liga.rounds === "ida-vuelta",
-        });
-      } else if (t.format.type === "zonas-playoffs") {
-        const zonesMap = {};
-        t.teams.forEach((team) => {
-          const key = team.zone || "Zona";
-          if (!zonesMap[key]) zonesMap[key] = [];
-          zonesMap[key].push(team.id);
-        });
-        const baseZonas = generarFixtureZonas(zonesMap, {
-          idaVuelta: t.format.liga.rounds === "ida-vuelta",
-        });
-        const playoffs = generarPlayoffsDesdeZonas(
-          t,
-          t.format.eliminacion.type
-        );
-        matchesBase = baseZonas.concat(playoffs);
-
-      
-      } else if (t.format.type === "especial-8x3") { 
-        // Ahora el formato especial 8×3 se apoya en un "modelo Evita" interno
-        matchesBase = generarPartidosDesdeModeloEvita(
-          t,
-          "EVITA_24_8x3_NORMAL_5D_2C"
-        );
-        
-        if (!matchesBase || !matchesBase.length) {
-          // generarPartidosDesdeModeloEvita ya muestra el problema si algo falla
-          return;
-        }
-           console.log(
-          "DEBUG ESPECIAL-8x3 → equipos:",
-          t.teams.length,
-          "partidos generados (antes de ordenar):",
-          matchesBase.length
-        );
-        
-      } else if (t.format.type === "eliminacion") {
-        const ids = t.teams.map((e) => e.id);
-        matchesBase = generarLlavesEliminacion(ids, {
-          type: t.format.eliminacion.type,
-        });
-      }
-
-
-      // Renumeramos TODOS los partidos con IDs numéricos globales (1, 2, 3, ...)
-      matchesBase = renumerarPartidosConIdsNumericos(matchesBase);
-
-      // Luego asignamos fechas/horarios/canchas
-      const matches = asignarHorarios(matchesBase, scheduleOptions);
-      t.matches = matches;
-      upsertCurrentTournament();
-      renderFixtureResult();
-      renderExportView("zone");
-    });
+    // Asignar fechas / horas / canchas
+    const matches = asignarHorarios(matchesBase, scheduleOptions);
+    t.matches = matches;
+    upsertCurrentTournament();
+    renderFixtureResult();
+    renderExportView("zone");
+  });
 }
+
 
 function renderFixtureResult() {
   const container = document.getElementById("fixture-result");
