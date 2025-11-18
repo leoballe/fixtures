@@ -1354,7 +1354,7 @@ function asignarHorarios(matches, options) {
   const used = new Array(slots.length).fill(false);
   const lastEnd = {}; // último final de partido por equipo (minutos absolutos)
   const usedPerDay = new Array(numDays).fill(0);
-  const maxMatchesPerDay =
+const maxMatchesPerDay = matches.length;
     numDays > 0 ? Math.ceil(matches.length / numDays) : matches.length;
 
   const scheduled = matches.map((m) => {
