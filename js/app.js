@@ -1584,7 +1584,11 @@ const maxMin = parseTimeToMinutes(maxStr);
       for (let i = 0; i < unscheduledIdxs.length; i++) {
         const matchIndex = unscheduledIdxs[i];
         const m = matches[matchIndex];
-
+// Si el partido tiene día preferido (por equilibrio de Fase 1)
+      if (typeof m.preferredDayIndex === "number") {
+        // Si el slot no corresponde a ese día, saltamos
+        if (slot.dayIndex !== m.preferredDayIndex) continue;
+      }
         if (puedeJugarEnSlot(m, slot, 0)) {
           chosenPos = i;
           break;
@@ -2493,6 +2497,39 @@ const scheduleOptions = {
 
     // IDs numéricos globales
     matchesBase = renumerarPartidosConIdsNumericos(matchesBase);
+// =====================================================
+//  Reparto equilibrado de Fase 1 (8x3 → mitad día 1, mitad día 2)
+// =====================================================
+if (
+  Array.isArray(matches) &&
+  matches.length &&
+  matches.some(m => (m.phase || "").includes("Fase 1"))
+) {
+  const fase1 = matches.filter(m => (m.phase || "").includes("Fase 1"));
+  const otros = matches.filter(m => !(m.phase || "").includes("Fase 1"));
+
+  // Ordenar por zona y ronda
+  fase1.sort((a, b) => {
+    const za = a.zone || "";
+    const zb = b.zone || "";
+    if (za < zb) return -1;
+    if (za > zb) return 1;
+    const ra = a.round || 0;
+    const rb = b.round || 0;
+    return ra - rb;
+  });
+
+  // Mitad y mitad
+  const mitad = Math.ceil(fase1.length / 2);
+  const fase1_dia1 = fase1.slice(0, mitad);
+  const fase1_dia2 = fase1.slice(mitad);
+
+  // Día preferido para el scheduler
+  fase1_dia1.forEach(m => (m.preferredDayIndex = 0)); // Día 1
+  fase1_dia2.forEach(m => (m.preferredDayIndex = 1)); // Día 2
+
+  matches = [].concat(fase1_dia1, fase1_dia2, otros);
+}
 // =====================================================
 //  Reparto equilibrado de Fase 1 (8x3 → mitad día 1, mitad día 2)
 // =====================================================
