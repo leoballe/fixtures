@@ -1496,8 +1496,8 @@ function asignarHorarios(matches, options = {}) {
     const minStr = dc.timeMin || options.dayTimeMin || (appState.currentTournament && appState.currentTournament.dayTimeMin) || "09:00";
     const maxStr = dc.timeMax || options.dayTimeMax || (appState.currentTournament && appState.currentTournament.dayTimeMax) || "22:00";
 
-    const minMin = timeStrToMinutes(minStr);
-    const maxMin = timeStrToMinutes(maxStr);
+const minMin = parseTimeToMinutes(minStr);
+const maxMin = parseTimeToMinutes(maxStr);
 
     if (isNaN(minMin) || isNaN(maxMin) || maxMin <= minMin) return;
 
