@@ -251,40 +251,7 @@ function renderDayConfigs() {
   });
 }
 
-// Engancha cambios de fechas del Paso 1 y hace el primer render
-function initScheduleDaysUI() {
-  const startInput = document.getElementById("t-date-start");
-  const endInput = document.getElementById("t-date-end");
 
-  if (startInput) {
-    startInput.addEventListener("change", () => {
-      const t = appState.currentTournament;
-      if (!t) return;
-      t.dateStart = startInput.value || "";
-      ensureDayConfigs(t);
-      renderDayConfigs();
-      if (typeof upsertCurrentTournament === "function") {
-        upsertCurrentTournament();
-      }
-    });
-  }
-
-  if (endInput) {
-    endInput.addEventListener("change", () => {
-      const t = appState.currentTournament;
-      if (!t) return;
-      t.dateEnd = endInput.value || "";
-      ensureDayConfigs(t);
-      renderDayConfigs();
-      if (typeof upsertCurrentTournament === "function") {
-        upsertCurrentTournament();
-      }
-    });
-  }
-
-  // Primer render al cargar
-  renderDayConfigs();
-}
 
 const appState = {
   currentTournament: null,
@@ -2194,31 +2161,42 @@ function renderFieldDaysMatrix() {
   });
 }
 
-// Inicialización: engancha las fechas del Paso 1 y hace el primer render
+// Engancha cambios de fechas del Paso 1, genera los días
+// y refresca la tabla + la matriz de canchas.
 function initScheduleDaysUI() {
-  const dateStartInput = document.getElementById("t-date-start");
-  const dateEndInput = document.getElementById("t-date-end");
+  const startInput = document.getElementById("t-date-start");
+  const endInput = document.getElementById("t-date-end");
 
-  if (dateStartInput) {
-    dateStartInput.addEventListener("change", () => {
+  if (startInput) {
+    startInput.addEventListener("change", () => {
       const t = appState.currentTournament;
       if (!t) return;
-      t.dateStart = dateStartInput.value || "";
+      t.dateStart = startInput.value || "";
+      ensureDayConfigs(t);
       renderDayConfigs();
-    });
-  }
-  if (dateEndInput) {
-    dateEndInput.addEventListener("change", () => {
-      const t = appState.currentTournament;
-      if (!t) return;
-      t.dateEnd = dateEndInput.value || "";
-      renderDayConfigs();
+      if (typeof upsertCurrentTournament === "function") {
+        upsertCurrentTournament();
+      }
     });
   }
 
-  // Primera renderización al iniciar
+  if (endInput) {
+    endInput.addEventListener("change", () => {
+      const t = appState.currentTournament;
+      if (!t) return;
+      t.dateEnd = endInput.value || "";
+      ensureDayConfigs(t);
+      renderDayConfigs();
+      if (typeof upsertCurrentTournament === "function") {
+        upsertCurrentTournament();
+      }
+    });
+  }
+
+  // Primer render al cargar
   renderDayConfigs();
 }
+
 
 function initFieldsSection() {
   const btnAddField = document.getElementById("btn-add-field");
@@ -2385,12 +2363,6 @@ function initFixtureGeneration() {
       t.matchDurationMinutes = matchDurationMinutes;
       t.restMinMinutes = restMinMinutes;
       upsertCurrentTournament();
-
-          // Leemos también los horarios actuales del Paso 4
-      const dayTimeMinInput = document.getElementById("day-time-min");
-      const dayTimeMaxInput = document.getElementById("day-time-max");
-      const matchDurationInput = document.getElementById("match-duration");
-      const restMinInput = document.getElementById("rest-min");
 
       const dayTimeMin =
         (dayTimeMinInput && dayTimeMinInput.value) ||
