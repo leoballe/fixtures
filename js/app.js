@@ -1952,11 +1952,13 @@ function initFormatSection() {
 function renderFieldDaysMatrix() {
   const t = appState.currentTournament;
   if (!t) return;
+
   const container = document.getElementById("field-days-container");
   if (!container) return;
 
-  const dayConfigs = (t.schedule && t.schedule.dayConfigs) || [];
-  const fields = t.fields || [];
+  // Ahora usamos el nuevo estado: t.dayConfigs y t.fields
+  const dayConfigs = Array.isArray(t.dayConfigs) ? t.dayConfigs : [];
+  const fields = Array.isArray(t.fields) ? t.fields : [];
 
   if (!dayConfigs.length || !fields.length) {
     container.innerHTML =
@@ -1964,7 +1966,7 @@ function renderFieldDaysMatrix() {
     return;
   }
 
-  // Asegurar estructura daysEnabled en cada cancha
+  // Aseguramos la estructura daysEnabled en cada cancha
   fields.forEach((field) => {
     if (!Array.isArray(field.daysEnabled)) {
       field.daysEnabled = [];
@@ -2018,6 +2020,8 @@ function renderFieldDaysMatrix() {
         field.daysEnabled = [];
       }
       field.daysEnabled[dayIdx] = chk.checked;
+
+      // Guardamos el torneo actualizado
       if (typeof upsertCurrentTournament === "function") {
         upsertCurrentTournament();
       }
