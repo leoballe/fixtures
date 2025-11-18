@@ -1419,13 +1419,12 @@ function generarEspecial8x3(t) {
 
   return allMatches;
 }
-function asignarHorarios(matches, options) {
+function asignarHorarios(matches, options = {}) {
   if (!matches || !matches.length) return matches || [];
 
-  options = options || {};
-
-  const dur = options.matchDurationMinutes || 60;
-  const rest = options.restMinMinutes || 0;
+  // Duración y descanso (el descanso ahora es "suave")
+  const dur = Number(options.matchDurationMinutes || 60);
+  const restGlobal = Number(options.restMinMinutes || 0);
 
   // =====================
   //  CANCHAS
@@ -1440,334 +1439,203 @@ function asignarHorarios(matches, options) {
   ) {
     fields = appState.currentTournament.fields.slice();
   } else {
-    fields = [{ id: safeId("field"), name: "Cancha 1", maxMatchesPerDay: null }];
+    // Fallback: una sola cancha genérica
+    fields = [{ id: "C1", name: "Cancha 1" }];
   }
 
   // =====================
-  //  CORTES HORARIOS
+  //  DÍAS / DAY CONFIGS
   // =====================
-  const cortes = Array.isArray(options.breaks)
-    ? options.breaks
-        .map((b) => {
-          const from = parseTimeToMinutes(b.from);
-          const to = parseTimeToMinutes(b.to);
-          if (from === null || to === null || to <= from) return null;
-          return { from, to };
-        })
-        .filter(Boolean)
-    : [];
+  let dayConfigs = [];
 
-  // =====================
-  //  SLOTS DISPONIBLES (día × hora × cancha)
-  // =====================
-  const slots = [];
-  let numDays = 0;
-
-  const dayConfigs =
-    Array.isArray(options.dayConfigs) && options.dayConfigs.length
-      ? options.dayConfigs
-      : null;
-
-  if (dayConfigs) {
-    numDays = dayConfigs.length;
-
-    dayConfigs.forEach((dc, dayIdx) => {
-      if (!dc || dc.type === "off") return; // Día sin juego
-
-      const dateStr =
-        dc.date ||
-        (options.dateStart
-          ? formatDate(addDays(dateStrToDate(options.dateStart), dayIdx))
-          : "");
-
-      const timeMinStr = dc.timeMin || options.dayTimeMin || "09:00";
-      const timeMaxStr = dc.timeMax || options.dayTimeMax || "22:00";
-
-      const minMin = parseTimeToMinutes(timeMinStr);
-      const maxMin = parseTimeToMinutes(timeMaxStr);
-      if (minMin === null || maxMin === null || maxMin <= minMin) return;
-
-      const base = dayIdx * 24 * 60;
-
-      for (let t = minMin; t + dur <= maxMin; t += dur) {
-        const inBreak = cortes.some(
-          (c) => !(t + dur <= c.from || t >= c.to)
-        );
-        if (inBreak) continue;
-
-        fields.forEach((field) => {
-          slots.push({
-            date: dateStr,
-            dayIndex: dayIdx,
-            absoluteStart: base + t,
-            startMinutes: t,
-            fieldId: field.id,
-          });
-        });
-      }
-    });
+  if (Array.isArray(options.dayConfigs) && options.dayConfigs.length) {
+    dayConfigs = options.dayConfigs.slice();
+  } else if (
+    appState.currentTournament &&
+    Array.isArray(appState.currentTournament.dayConfigs) &&
+    appState.currentTournament.dayConfigs.length
+  ) {
+    dayConfigs = appState.currentTournament.dayConfigs.slice();
   } else {
-    // Fallback: rango global si no hay dayConfigs
-    const dateStartObj = options.dateStart
-      ? dateStrToDate(options.dateStart)
-      : null;
-    const dateEndObj = options.dateEnd
-      ? dateStrToDate(options.dateEnd)
-      : null;
-
-    if (!dateStartObj || !dateEndObj || dateEndObj < dateStartObj) {
-      console.warn("Rango de fechas inválido; partidos sin programar");
-      return matches;
-    }
-
-    const minMin = parseTimeToMinutes(options.dayTimeMin || "09:00");
-    const maxMin = parseTimeToMinutes(options.dayTimeMax || "22:00");
-    if (minMin === null || maxMin === null || maxMin <= minMin) {
-      console.warn("Horario diario inválido; partidos sin programar");
-      return matches;
-    }
-
-    let dayIdx = 0;
-    for (
-      let d = new Date(dateStartObj.getTime());
-      d <= dateEndObj;
-      d = addDays(d, 1), dayIdx++
-    ) {
-      const dateStr = formatDate(d);
-      const base = dayIdx * 24 * 60;
-
-      for (let t = minMin; t + dur <= maxMin; t += dur) {
-        const inBreak = cortes.some(
-          (c) => !(t + dur <= c.from || t >= c.to)
-        );
-        if (inBreak) continue;
-
-        fields.forEach((field) => {
-          slots.push({
-            date: dateStr,
-            dayIndex: dayIdx,
-            absoluteStart: base + t,
-            startMinutes: t,
-            fieldId: field.id,
-          });
+    // Último recurso: armar días "planos"
+    const t = appState.currentTournament;
+    if (t && t.dateStart && t.numDays) {
+      const base = new Date(t.dateStart + "T00:00:00");
+      for (let i = 0; i < t.numDays; i++) {
+        const d = new Date(base);
+        d.setDate(base.getDate() + i);
+        const dateStr = d.toISOString().slice(0, 10);
+        dayConfigs.push({
+          index: i + 1,
+          date: dateStr,
+          type: "full",
+          timeMin: t.dayTimeMin || "09:00",
+          timeMax: t.dayTimeMax || "22:00",
         });
       }
     }
-    numDays = slots.reduce(
-      (max, s) =>
-        typeof s.dayIndex === "number"
-          ? Math.max(max, s.dayIndex + 1)
-          : max,
-      0
+  }
+
+  if (!dayConfigs.length) {
+    console.warn("[asignarHorarios] dayConfigs vacío; no se pueden generar slots");
+    return matches.map(m =>
+      Object.assign({}, m, { date: null, time: null, fieldId: null })
     );
   }
 
+  // =====================
+  //  GENERAR SLOTS (día × cancha × horarios)
+  // =====================
+  const slots = [];
+
+  dayConfigs.forEach((dc, idx) => {
+    if (!dc || dc.type === "off") return;
+
+    const dateStr = dc.date;
+    const minStr = dc.timeMin || options.dayTimeMin || (appState.currentTournament && appState.currentTournament.dayTimeMin) || "09:00";
+    const maxStr = dc.timeMax || options.dayTimeMax || (appState.currentTournament && appState.currentTournament.dayTimeMax) || "22:00";
+
+    const minMin = timeStrToMinutes(minStr);
+    const maxMin = timeStrToMinutes(maxStr);
+
+    if (isNaN(minMin) || isNaN(maxMin) || maxMin <= minMin) return;
+
+    for (let t = minMin; t + dur <= maxMin; t += dur) {
+      for (const f of fields) {
+        slots.push({
+          dayIndex: idx,
+          date: dateStr,
+          fieldId: f.id,
+          startMinutes: t,
+          absoluteStart: idx * 24 * 60 + t,
+        });
+      }
+    }
+  });
+
   if (!slots.length) {
-    console.warn("Sin slots disponibles; partidos sin programar");
-    return matches;
+    console.warn("[asignarHorarios] No se generaron slots de horario");
+    return matches.map(m =>
+      Object.assign({}, m, { date: null, time: null, fieldId: null })
+    );
   }
 
-  // Orden cronológico de slots
+  // Orden cronológico estricto de los slots
   slots.sort((a, b) => a.absoluteStart - b.absoluteStart);
 
   // =====================
-  //  CONTROLES DE USO
+  //  ALGORITMO SLOT-DRIVEN
+  //  (por cada slot, elijo el mejor partido disponible)
   // =====================
-  const used = new Array(slots.length).fill(false);
-  const lastEnd = {}; // último final por equipo (minutos absolutos)
-  const usedPerFieldDay = {}; // clave: fieldId|dayIndex
 
-  // Detectar si es modelo Evita 24×8×3
-  const isEvita = matches.some((m) => {
-    const phase = (m.phase || "").toLowerCase();
-    const zone = (m.zone || "").toLowerCase();
-    return (
-      phase.includes("fase 1") ||
-      phase.includes("fase 2") ||
-      phase.includes("puestos 1-8") ||
-      phase.includes("puestos 9-16") ||
-      phase.includes("puestos 17-24") ||
-      zone === "zona a1" ||
-      zone === "zona a2"
-    );
-  });
+  const scheduled = new Array(matches.length);
+  const unscheduledIdxs = matches.map((_, i) => i);
+  const lastEnd = Object.create(null);
+  const usedPerDay = new Array(dayConfigs.length).fill(0);
+  const maxMatchesPerDay = matches.length; // sin límite real
 
-  const lastDayIndex = Math.max(0, numDays - 1);
-
-  // =====================
-  //  VENTANAS DE DÍAS POR FASE (Evita)
-  // =====================
-  function getPhaseDayWindowStrict(m) {
-    if (!isEvita || numDays === 0) {
-      return { minDay: 0, maxDay: lastDayIndex, strict: false };
-    }
-
-    const phase = (m.phase || "").toLowerCase();
-    const zone = (m.zone || "").toLowerCase();
-
-    // FASE 1 · ZONAS (8×3) → días 1–2
-    if (phase.indexOf("fase 1") !== -1) {
-      return {
-        minDay: 0,
-        maxDay: Math.min(1, lastDayIndex),
-        strict: true,
-      };
-    }
-
-    // FASE 2 · A1 / A2 → días 3–4
-    if (
-      phase.indexOf("fase 2") !== -1 ||
-      zone === "zona a1" ||
-      zone === "zona a2"
-    ) {
-      const min = Math.min(2, lastDayIndex);
-      const max = Math.min(3, lastDayIndex);
-      return { minDay: min, maxDay: max, strict: true };
-    }
-
-    // PUESTOS 9–16 / 17–24 → días 3–5
-    if (
-      phase.indexOf("puestos 9-16") !== -1 ||
-      phase.indexOf("puestos 17-24") !== -1
-    ) {
-      const min = Math.min(2, lastDayIndex);
-      const max = Math.min(4, lastDayIndex);
-      return { minDay: min, maxDay: max, strict: true };
-    }
-
-    // PUESTOS 1–8 → desde día 4 en adelante
-    if (phase.indexOf("puestos 1-8") !== -1) {
-      const min = Math.min(3, lastDayIndex);
-      return { minDay: min, maxDay: lastDayIndex, strict: true };
-    }
-
-    // Cualquier otra fase → sin restricciones especiales
-    return { minDay: 0, maxDay: lastDayIndex, strict: false };
-  }
-
-  // =====================
-  //  ELECCIÓN DE SLOT EN UNA VENTANA
-  //  (maximiza descanso entre partidos del mismo equipo)
-  // =====================
-  // =====================
-  //  ELECCIÓN DE SLOT EN UNA VENTANA
-  //  (primer slot cronológico que cumple el descanso mínimo)
-  // =====================
-  function chooseSlotInWindow(m, minDay, maxDay) {
+  function puedeJugarEnSlot(m, slot, restOverride) {
+    const rest = typeof restOverride === "number" ? restOverride : restGlobal;
     const home = m.homeTeamId;
     const away = m.awayTeamId;
 
-    for (let i = 0; i < slots.length; i++) {
-      if (used[i]) continue;
-      const s = slots[i];
+    const startAbs = slot.absoluteStart;
+    const endAbs = startAbs + dur;
 
-      // Fuera de la ventana de días de la fase
-      if (
-        typeof s.dayIndex === "number" &&
-        (s.dayIndex < minDay || s.dayIndex > maxDay)
-      ) {
-        continue;
+    // Control de descanso por equipo (si tiene ID real)
+    if (home) {
+      const lastH = lastEnd[home] ?? -Infinity;
+      if (startAbs - lastH < rest) return false;
+    }
+    if (away) {
+      const lastA = lastEnd[away] ?? -Infinity;
+      if (startAbs - lastA < rest) return false;
+    }
+
+    // Límite por día (prácticamente infinito)
+    if (
+      typeof slot.dayIndex === "number" &&
+      slot.dayIndex >= 0 &&
+      usedPerDay[slot.dayIndex] >= maxMatchesPerDay
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  for (const slot of slots) {
+    let chosenPos = -1;
+
+    // 1) Intento respetando descanso global
+    for (let i = 0; i < unscheduledIdxs.length; i++) {
+      const matchIndex = unscheduledIdxs[i];
+      const m = matches[matchIndex];
+
+      if (puedeJugarEnSlot(m, slot, undefined)) {
+        chosenPos = i;
+        break;
       }
+    }
 
-      const startAbs = s.absoluteStart;
+    // 2) Si nadie entra por descanso, relajamos descanso a 0
+    if (chosenPos === -1 && restGlobal > 0) {
+      for (let i = 0; i < unscheduledIdxs.length; i++) {
+        const matchIndex = unscheduledIdxs[i];
+        const m = matches[matchIndex];
+
+        if (puedeJugarEnSlot(m, slot, 0)) {
+          chosenPos = i;
+          break;
+        }
+      }
+    }
+
+    // Si encontramos partido para este slot, lo asignamos
+    if (chosenPos !== -1) {
+      const matchIndex = unscheduledIdxs[chosenPos];
+      unscheduledIdxs.splice(chosenPos, 1);
+
+      const m = matches[matchIndex];
+      const home = m.homeTeamId;
+      const away = m.awayTeamId;
+
+      const startAbs = slot.absoluteStart;
       const endAbs = startAbs + dur;
 
-      // Respetar descanso mínimo de local
-      if (home) {
-        const lastH = lastEnd[home];
-        if (typeof lastH === "number" && startAbs - lastH < rest) {
-          continue;
-        }
+      if (home) lastEnd[home] = endAbs;
+      if (away) lastEnd[away] = endAbs;
+
+      if (
+        typeof slot.dayIndex === "number" &&
+        slot.dayIndex >= 0
+      ) {
+        usedPerDay[slot.dayIndex]++;
       }
 
-      // Respetar descanso mínimo de visitante
-      if (away) {
-        const lastA = lastEnd[away];
-        if (typeof lastA === "number" && startAbs - lastA < rest) {
-          continue;
-        }
-      }
-
-      // Primer slot que cumple todo → lo usamos
-      return i;
-    }
-
-    // No hay slot disponible en esta ventana
-    return -1;
-  }
-
-
-  // =====================
-  //  ELECCIÓN FINAL DE SLOT (con ventana + extensión si hace falta)
-  // =====================
-  function chooseSlotForMatch(m) {
-    const baseWindow = getPhaseDayWindowStrict(m);
-
-    // 1) Intento en ventana "ideal"
-    let idx = chooseSlotInWindow(m, baseWindow.minDay, baseWindow.maxDay);
-    if (idx !== -1 || !baseWindow.strict) {
-      return idx;
-    }
-
-    // 2) Si no entra en su ventana ideal, extendemos hacia adelante
-    for (
-      let maxDay = baseWindow.maxDay + 1;
-      maxDay <= lastDayIndex;
-      maxDay++
-    ) {
-      idx = chooseSlotInWindow(m, baseWindow.minDay, maxDay);
-      if (idx !== -1) {
-        return idx;
-      }
-    }
-
-    // 3) Último recurso: ignorar ventanas y usar cualquier día
-    return chooseSlotInWindow(m, 0, lastDayIndex);
-  }
-
-  // =====================
-  //  PROGRAMACIÓN FINAL
-  // =====================
-  const scheduled = matches.map((m) => {
-    const slotIndex = chooseSlotForMatch(m);
-
-    if (slotIndex === -1) {
-      // No encontró ningún slot razonable
-      return Object.assign({}, m, {
-        date: null,
-        time: null,
-        fieldId: null,
+      scheduled[matchIndex] = Object.assign({}, m, {
+        date: slot.date,
+        time: minutesToTimeStr(slot.startMinutes),
+        fieldId: slot.fieldId,
       });
     }
+  }
 
-    const s = slots[slotIndex];
-    used[slotIndex] = true;
-
-    const endAbs = s.absoluteStart + dur;
-    if (m.homeTeamId) {
-      lastEnd[m.homeTeamId] = endAbs;
-    }
-    if (m.awayTeamId) {
-      lastEnd[m.awayTeamId] = endAbs;
-    }
-
-    const keyFD =
-      s.fieldId && typeof s.dayIndex === "number"
-        ? s.fieldId + "|" + s.dayIndex
-        : null;
-    if (keyFD) {
-      usedPerFieldDay[keyFD] = (usedPerFieldDay[keyFD] || 0) + 1;
-    }
-
-    return Object.assign({}, m, {
-      date: s.date,
-      time: minutesToTimeStr(s.startMinutes),
-      fieldId: s.fieldId,
+  // =====================
+  //  LOS QUE NO ENTRARON EN NINGÚN SLOT
+  // =====================
+  for (const idx of unscheduledIdxs) {
+    const m = matches[idx];
+    scheduled[idx] = Object.assign({}, m, {
+      date: null,
+      time: null,
+      fieldId: null,
     });
-  });
+  }
 
   return scheduled;
 }
+
 
 
 
