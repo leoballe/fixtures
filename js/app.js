@@ -2334,35 +2334,7 @@ function initFixtureGeneration() {
         return;
       }
 
-         // Leemos SIEMPRE lo que está en los campos del Paso 4
-      const dayTimeMinInput = document.getElementById("day-time-min");
-      const dayTimeMaxInput = document.getElementById("day-time-max");
-      const matchDurationInput = document.getElementById("match-duration");
-      const restMinInput = document.getElementById("rest-min");
-
-      const dayTimeMin =
-        (dayTimeMinInput && dayTimeMinInput.value) ||
-        t.dayTimeMin ||
-        "09:00";
-      const dayTimeMax =
-        (dayTimeMaxInput && dayTimeMaxInput.value) ||
-        t.dayTimeMax ||
-        "22:00";
-      const matchDurationMinutes = Number(
-        (matchDurationInput && matchDurationInput.value) ||
-          t.matchDurationMinutes ||
-          60
-      );
-      const restMinMinutes = Number(
-        (restMinInput && restMinInput.value) || t.restMinMinutes || 0
-      );
-
-      // De paso, sincronizamos con el torneo actual
-      t.dayTimeMin = dayTimeMin;
-      t.dayTimeMax = dayTimeMax;
-      t.matchDurationMinutes = matchDurationMinutes;
-      t.restMinMinutes = restMinMinutes;
-      upsertCurrentTournament();
+        
 
       const dayTimeMin =
         (dayTimeMinInput && dayTimeMinInput.value) ||
