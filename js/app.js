@@ -1649,18 +1649,19 @@ function asignarHorarios(matches, options) {
   //  ELECCIÓN DE SLOT EN UNA VENTANA
   //  (maximiza descanso entre partidos del mismo equipo)
   // =====================
+  // =====================
+  //  ELECCIÓN DE SLOT EN UNA VENTANA
+  //  (primer slot cronológico que cumple el descanso mínimo)
+  // =====================
   function chooseSlotInWindow(m, minDay, maxDay) {
     const home = m.homeTeamId;
     const away = m.awayTeamId;
-
-    let bestIndex = -1;
-    let bestRestScore = -Infinity;
-    let bestStartAbs = Infinity;
 
     for (let i = 0; i < slots.length; i++) {
       if (used[i]) continue;
       const s = slots[i];
 
+      // Fuera de la ventana de días de la fase
       if (
         typeof s.dayIndex === "number" &&
         (s.dayIndex < minDay || s.dayIndex > maxDay)
@@ -1671,49 +1672,30 @@ function asignarHorarios(matches, options) {
       const startAbs = s.absoluteStart;
       const endAbs = startAbs + dur;
 
-      let restScore = Number.POSITIVE_INFINITY;
-      let feasible = true;
-
+      // Respetar descanso mínimo de local
       if (home) {
         const lastH = lastEnd[home];
-        if (typeof lastH === "number") {
-          const diffH = startAbs - lastH;
-          if (diffH < rest) {
-            feasible = false;
-          } else {
-            restScore = Math.min(restScore, diffH);
-          }
+        if (typeof lastH === "number" && startAbs - lastH < rest) {
+          continue;
         }
       }
 
-      if (away && feasible) {
+      // Respetar descanso mínimo de visitante
+      if (away) {
         const lastA = lastEnd[away];
-        if (typeof lastA === "number") {
-          const diffA = startAbs - lastA;
-          if (diffA < rest) {
-            feasible = false;
-          } else {
-            restScore = Math.min(restScore, diffA);
-          }
+        if (typeof lastA === "number" && startAbs - lastA < rest) {
+          continue;
         }
       }
 
-      if (!feasible) continue;
-
-      // Si no hay partidos previos de ninguno, restScore queda en +∞
-      // y priorizamos el slot más temprano.
-      if (
-        restScore > bestRestScore ||
-        (restScore === bestRestScore && startAbs < bestStartAbs)
-      ) {
-        bestRestScore = restScore;
-        bestStartAbs = startAbs;
-        bestIndex = i;
-      }
+      // Primer slot que cumple todo → lo usamos
+      return i;
     }
 
-    return bestIndex;
+    // No hay slot disponible en esta ventana
+    return -1;
   }
+
 
   // =====================
   //  ELECCIÓN FINAL DE SLOT (con ventana + extensión si hace falta)
