@@ -2649,6 +2649,8 @@ if (t.format.type === "especial-8x3" && Array.isArray(matchesBase)) {
       // Día preferido para el scheduler
       fase1_dia1.forEach((m) => (m.preferredDayIndex = 0)); // Día 1
       fase1_dia2.forEach((m) => (m.preferredDayIndex = 1)); // Día 2
+  // El resto de las fases (A1/A2, 9–16, 17–24, 1–8) recién desde el Día 3
+  otros.forEach((m) => (m.minDayIndex = 2)); // 2 = índice del Día 3
 
       matchesBase = [].concat(fase1_dia1, fase1_dia2, otros);
     }
