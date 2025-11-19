@@ -2429,18 +2429,20 @@ function initFixtureGeneration() {
       return;
     }
 
-    const scheduleOptions = {
-      dateStart: t.dateStart,
-      dateEnd: t.dateEnd,
-      dayTimeMin,
-      dayTimeMax,
-      matchDurationMinutes,
-      restMinMinutes,
-      fields: Array.isArray(t.fields) ? t.fields.slice() : [],
-      breaks: Array.isArray(t.breaks) ? t.breaks.slice() : [],
-      restrictions: t.format ? t.format.restrictions : null,
-      dayConfigs: dayConfigsFromState,
-    };
+const scheduleOptions = {
+  dateStart: t.dateStart,
+  dateEnd: t.dateEnd,
+  dayTimeMin,
+  dayTimeMax,
+  matchDurationMinutes,
+  restMinMinutes,
+  fields: t.fields || [],
+  breaks: t.breaks || [],
+  restrictions: t.format ? t.format.restrictions : null,
+  // Usamos siempre los días que tenés en el Paso 4
+  dayConfigs: dayConfigsFromState,
+};
+
 
     // ----------------------
     // Generar lista base de partidos según formato
@@ -2506,51 +2508,48 @@ function initFixtureGeneration() {
       return;
     }
 
-    // IDs numéricos globales (1, 2, 3, …) y actualización de GP/PP
+    // IDs numéricos globales
     matchesBase = renumerarPartidosConIdsNumericos(matchesBase);
 
-    // ----------------------
-    // Regla especial modelo 24 · 8×3 (Evita)
-    // - Día 1: zonas A–D
-    // - Día 2: zonas E–H
-    // - Día 3+: A1/A2 + puestos 1–24
-    // ----------------------
+    // ------------------------------
+    // Reglas especiales modelo 24 equipos · 8×3 (Evita)
+    // - Fase 1 (zonas) repartida:
+    //   · Zonas A–D → Día 1
+    //   · Zonas E–H → Día 2
+    // - Resto de fases (A1/A2, 9–16, 17–24, 1–8)
+    //   no antes del Día 3
+    // ------------------------------
     if (t.format.type === "especial-8x3") {
-      const tieneFase1 = matchesBase.some(
-        (m) => (m.phase || "").indexOf("Fase 1") !== -1
+      const fase1 = matchesBase.filter(m =>
+        (m.phase || "").indexOf("Fase 1") !== -1
+      );
+      const otros = matchesBase.filter(m =>
+        (m.phase || "").indexOf("Fase 1") === -1
       );
 
-      if (tieneFase1) {
-        const fase1 = [];
-        const otros = [];
-        matchesBase.forEach((m) => {
-          if ((m.phase || "").indexOf("Fase 1") !== -1) fase1.push(m);
-          else otros.push(m);
-        });
-
-        // Reparto por zonas:
-        // - Zonas A, B, C, D → Día 1 (index 0)
-        // - Zonas E, F, G, H → Día 2 (index 1)
-        fase1.forEach((m) => {
-          const z = (m.zone || "").trim();
-          const letra = z ? z[z.length - 1].toUpperCase() : "";
-          if (["A", "B", "C", "D"].indexOf(letra) !== -1) {
-            m.preferredDayIndex = 0;
-          } else if (["E", "F", "G", "H"].indexOf(letra) !== -1) {
-            m.preferredDayIndex = 1;
-          }
-        });
-
-        // El resto de las fases no puede jugarse antes del Día 3
-        if (dayConfigsFromState.length >= 3) {
-          otros.forEach((m) => {
-            m.minDayIndex = 2; // índice 2 = Día 3
-          });
+      // Reparto de Fase 1 por letra de zona
+      fase1.forEach(m => {
+        const z = (m.zone || "").trim();    // "Zona A", "Zona B", etc.
+        const letra = z ? z[z.length - 1].toUpperCase() : "";
+        if (["A", "B", "C", "D"].includes(letra)) {
+          // Día 1 → índice 0
+          m.preferredDayIndex = 0;
+        } else if (["E", "F", "G", "H"].includes(letra)) {
+          // Día 2 → índice 1
+          m.preferredDayIndex = 1;
         }
+      });
+
+      // Fases posteriores mínimo Día 3
+      if (Array.isArray(dayConfigsFromState) && dayConfigsFromState.length >= 3) {
+        otros.forEach(m => {
+          m.minDayIndex = 2; // índice 2 = Día 3
+        });
       }
+
+      matchesBase = fase1.concat(otros);
     }
 
-    // ----------------------
     // Asignar fechas / horas / canchas
     // ----------------------
     const matches = asignarHorarios(matchesBase, scheduleOptions);
