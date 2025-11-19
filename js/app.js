@@ -96,7 +96,8 @@ function generarPartidosDesdeModeloEvita(torneo, modeloId) {
     // - ordenarMatchesEspecial8x3(...) los ordena "al estilo Evita" (zonas primero, finales al final)
     const base = generarEspecial8x3(torneo);
     if (!base || !base.length) return [];
-    return ordenarMatchesEspecial8x3(base);
+const baseOrdenada = ordenarMatchesEspecial8x3(base);
+return aplicarDistribucionEspecial8x3(baseOrdenada, modeloId);
   }
 
   // Para otros modelos que agreguemos más adelante:
@@ -1424,6 +1425,34 @@ function generarEspecial8x3(t) {
 //  SCHEDULER BÁSICO (ASIGNAR FECHAS / HORAS / CANCHAS)
 //  Versión slot-driven + días preferidos / mínimos
 // =====================
+// =====================
+//  AJUSTE DE DISTRIBUCIÓN · MODELO 24 equipos 8×3
+// =====================
+function aplicarDistribucionEspecial8x3(matches, modeloId) {
+  if (modeloId !== "EVITA_24_8x3_NORMAL_5D_2C") return matches;
+
+  // 1️⃣ Dividimos las zonas A–H en 2 grupos
+  const fase1 = matches.filter(m => (m.phase || "").includes("Fase 1"));
+  const otras = matches.filter(m => !(m.phase || "").includes("Fase 1"));
+
+  fase1.forEach(m => {
+    const zona = (m.zone || "").trim();
+    const letra = zona.slice(-1).toUpperCase();
+    if (["A", "B", "C", "D"].includes(letra)) {
+      m.preferredDayIndex = 0; // Día 1 (índice 0)
+    } else if (["E", "F", "G", "H"].includes(letra)) {
+      m.preferredDayIndex = 1; // Día 2 (índice 1)
+    }
+  });
+
+  // 2️⃣ Resto de fases (A1, A2, 9–16, 17–24, 1–8) → mínimo Día 3
+  otras.forEach(m => {
+    m.minDayIndex = 2; // Día 3 en adelante
+  });
+
+  return fase1.concat(otras);
+}
+
 function asignarHorarios(matches, options = {}) {
   if (!matches || !matches.length) return matches || [];
 
