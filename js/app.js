@@ -11,7 +11,7 @@
 // =====================
 // MODELOS EVITA (24 equipos)
 // =====================
-
+//lala//
 
 const EVITA_MODELS = {
   EVITA_24_8x3_NORMAL_5D_2C: {
