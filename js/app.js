@@ -1420,10 +1420,6 @@ function generarEspecial8x3(t) {
 
   return allMatches;
 }
-// =====================
-//  SCHEDULER BÁSICO (ASIGNAR FECHAS / HORAS / CANCHAS)
-//  Versión slot-driven + días preferidos / mínimos
-// =====================
 function asignarHorarios(matches, options = {}) {
   if (!matches || !matches.length) return matches || [];
 
@@ -1462,42 +1458,28 @@ function asignarHorarios(matches, options = {}) {
   ) {
     dayConfigs = appState.currentTournament.dayConfigs.slice();
   } else {
-    // Último recurso: armar días "planos" a partir de dateStart / dateEnd
+    // Último recurso: armar días "planos"
     const t = appState.currentTournament;
-    if (t && t.dateStart && t.dateEnd) {
-      const dateStart = dateStrToDate(t.dateStart);
-      const dateEnd = dateStrToDate(t.dateEnd);
-      if (dateStart && dateEnd && dateEnd >= dateStart) {
-        let idx = 0;
-        for (
-          let d = new Date(dateStart.getTime());
-          d <= dateEnd;
-          d = addDays(d, 1), idx++
-        ) {
-          const dateStr = formatDate(d);
-          dayConfigs.push({
-            index: idx + 1,
-            date: dateStr,
-            type: "full",
-            timeMin:
-              t.dayTimeMin ||
-              options.dayTimeMin ||
-              "09:00",
-            timeMax:
-              t.dayTimeMax ||
-              options.dayTimeMax ||
-              "22:00",
-          });
-        }
+    if (t && t.dateStart && t.numDays) {
+      const base = new Date(t.dateStart + "T00:00:00");
+      for (let i = 0; i < t.numDays; i++) {
+        const d = new Date(base);
+        d.setDate(base.getDate() + i);
+        const dateStr = d.toISOString().slice(0, 10);
+        dayConfigs.push({
+          index: i + 1,
+          date: dateStr,
+          type: "full",
+          timeMin: t.dayTimeMin || "09:00",
+          timeMax: t.dayTimeMax || "22:00",
+        });
       }
     }
   }
 
   if (!dayConfigs.length) {
-    console.warn(
-      "[asignarHorarios] dayConfigs vacío; no se pueden generar slots"
-    );
-    return matches.map((m) =>
+    console.warn("[asignarHorarios] dayConfigs vacío; no se pueden generar slots");
+    return matches.map(m =>
       Object.assign({}, m, { date: null, time: null, fieldId: null })
     );
   }
@@ -1508,43 +1490,25 @@ function asignarHorarios(matches, options = {}) {
   const slots = [];
 
   dayConfigs.forEach((dc, idx) => {
-    if (!dc || dc.type === "off") return; // Día en el que no se juega
+    if (!dc || dc.type === "off") return;
 
     const dateStr = dc.date;
-    const minStr =
-      dc.timeMin ||
-      options.dayTimeMin ||
-      (appState.currentTournament &&
-        appState.currentTournament.dayTimeMin) ||
-      "09:00";
-    const maxStr =
-      dc.timeMax ||
-      options.dayTimeMax ||
-      (appState.currentTournament &&
-        appState.currentTournament.dayTimeMax) ||
-      "22:00";
+    const minStr = dc.timeMin || options.dayTimeMin || (appState.currentTournament && appState.currentTournament.dayTimeMin) || "09:00";
+    const maxStr = dc.timeMax || options.dayTimeMax || (appState.currentTournament && appState.currentTournament.dayTimeMax) || "22:00";
 
-    const minMin = parseTimeToMinutes(minStr);
-    const maxMin = parseTimeToMinutes(maxStr);
+const minMin = parseTimeToMinutes(minStr);
+const maxMin = parseTimeToMinutes(maxStr);
 
-    if (minMin === null || maxMin === null || maxMin <= minMin) return;
+    if (isNaN(minMin) || isNaN(maxMin) || maxMin <= minMin) return;
 
-    for (let tMin = minMin; tMin + dur <= maxMin; tMin += dur) {
+    for (let t = minMin; t + dur <= maxMin; t += dur) {
       for (const f of fields) {
-        // Si la cancha tiene días deshabilitados, los respetamos
-        if (
-          Array.isArray(f.daysEnabled) &&
-          f.daysEnabled[idx] === false
-        ) {
-          continue;
-        }
-
         slots.push({
-          dayIndex: idx, // 0 = Día 1, 1 = Día 2, etc.
+          dayIndex: idx,
           date: dateStr,
           fieldId: f.id,
-          startMinutes: tMin,
-          absoluteStart: idx * 24 * 60 + tMin,
+          startMinutes: t,
+          absoluteStart: idx * 24 * 60 + t,
         });
       }
     }
@@ -1552,7 +1516,7 @@ function asignarHorarios(matches, options = {}) {
 
   if (!slots.length) {
     console.warn("[asignarHorarios] No se generaron slots de horario");
-    return matches.map((m) =>
+    return matches.map(m =>
       Object.assign({}, m, { date: null, time: null, fieldId: null })
     );
   }
@@ -1575,22 +1539,6 @@ function asignarHorarios(matches, options = {}) {
     const rest = typeof restOverride === "number" ? restOverride : restGlobal;
     const home = m.homeTeamId;
     const away = m.awayTeamId;
-
-    // Día mínimo (por ejemplo, llaves B/C desde día 3)
-    if (
-      typeof m.minDayIndex === "number" &&
-      slot.dayIndex < m.minDayIndex
-    ) {
-      return false;
-    }
-
-    // Día preferido EXACTO (para repartir Fase 1 entre día 1 y 2)
-    if (
-      typeof m.preferredDayIndex === "number" &&
-      slot.dayIndex !== m.preferredDayIndex
-    ) {
-      return false;
-    }
 
     const startAbs = slot.absoluteStart;
     const endAbs = startAbs + dur;
@@ -1636,7 +1584,11 @@ function asignarHorarios(matches, options = {}) {
       for (let i = 0; i < unscheduledIdxs.length; i++) {
         const matchIndex = unscheduledIdxs[i];
         const m = matches[matchIndex];
-
+// Si el partido tiene día preferido (por equilibrio de Fase 1)
+      if (typeof m.preferredDayIndex === "number") {
+        // Si el slot no corresponde a ese día, saltamos
+        if (slot.dayIndex !== m.preferredDayIndex) continue;
+      }
         if (puedeJugarEnSlot(m, slot, 0)) {
           chosenPos = i;
           break;
@@ -1688,7 +1640,6 @@ function asignarHorarios(matches, options = {}) {
 
   return scheduled;
 }
-
 
 
 
@@ -2413,9 +2364,6 @@ function renderBreaksList() {
 //  STEP 5: GENERAR FIXTURE
 // =====================
 
-// =====================
-//  STEP 5: GENERAR FIXTURE
-// =====================
 function initFixtureGeneration() {
   const btn = document.getElementById("btn-generate-fixture");
   if (!btn) return;
@@ -2424,12 +2372,14 @@ function initFixtureGeneration() {
     const t = appState.currentTournament;
     if (!t) return;
 
-    if (!t.teams.length) {
+    if (!t.teams || !t.teams.length) {
       alert("Primero cargá equipos.");
       return;
     }
 
-    // 👉 Paso 4: tomamos los inputs de rango horario global y duración
+    // ----------------------
+    // Paso 4: lectura de inputs de horario global
+    // ----------------------
     const dayTimeMinInput = document.getElementById("day-time-min");
     const dayTimeMaxInput = document.getElementById("day-time-max");
     const matchDurationInput = document.getElementById("match-duration");
@@ -2457,13 +2407,14 @@ function initFixtureGeneration() {
         0
     );
 
-    // Actualizamos el torneo con esos valores base
     t.dayTimeMin = dayTimeMin;
     t.dayTimeMax = dayTimeMax;
     t.matchDurationMinutes = matchDurationMinutes;
     t.restMinMinutes = restMinMinutes;
 
-    // 👉 Puente entre t.dayConfigs (tabla de días) y t.schedule.dayConfigs
+    // ----------------------
+    // Días del torneo (tabla Día 1, Día 2, …)
+    // ----------------------
     const dayConfigsFromState =
       (Array.isArray(t.dayConfigs) && t.dayConfigs.length)
         ? t.dayConfigs
@@ -2473,6 +2424,11 @@ function initFixtureGeneration() {
           ? t.schedule.dayConfigs
           : []);
 
+    if (!dayConfigsFromState.length) {
+      alert("Definí primero las fechas del torneo en el Paso 4.");
+      return;
+    }
+
     const scheduleOptions = {
       dateStart: t.dateStart,
       dateEnd: t.dateEnd,
@@ -2480,24 +2436,30 @@ function initFixtureGeneration() {
       dayTimeMax,
       matchDurationMinutes,
       restMinMinutes,
-      fields: t.fields || [],
-      breaks: t.breaks || [],
+      fields: Array.isArray(t.fields) ? t.fields.slice() : [],
+      breaks: Array.isArray(t.breaks) ? t.breaks.slice() : [],
       restrictions: t.format ? t.format.restrictions : null,
       dayConfigs: dayConfigsFromState,
     };
 
-    let matchesBase = [];
-
+    // ----------------------
+    // Generar lista base de partidos según formato
+    // ----------------------
     if (!t.format || !t.format.type) {
       alert("Definí el formato de competencia en el Paso 2.");
       return;
     }
 
+    let matchesBase = [];
+    const idaVueltaLiga =
+      t.format &&
+      t.format.liga &&
+      t.format.liga.rounds === "ida-vuelta";
+
     if (t.format.type === "liga") {
       const ids = t.teams.map((e) => e.id);
       matchesBase = generarFixtureLiga(ids, {
-        idaVuelta:
-          t.format.liga && t.format.liga.rounds === "ida-vuelta",
+        idaVuelta: idaVueltaLiga,
       });
     } else if (t.format.type === "zonas") {
       const zonesMap = {};
@@ -2507,8 +2469,7 @@ function initFixtureGeneration() {
         zonesMap[key].push(team.id);
       });
       matchesBase = generarFixtureZonas(zonesMap, {
-        idaVuelta:
-          t.format.liga && t.format.liga.rounds === "ida-vuelta",
+        idaVuelta: idaVueltaLiga,
       });
     } else if (t.format.type === "zonas-playoffs") {
       const zonesMap = {};
@@ -2518,8 +2479,7 @@ function initFixtureGeneration() {
         zonesMap[key].push(team.id);
       });
       const baseZonas = generarFixtureZonas(zonesMap, {
-        idaVuelta:
-          t.format.liga && t.format.liga.rounds === "ida-vuelta",
+        idaVuelta: idaVueltaLiga,
       });
       const playoffs = generarPlayoffsDesdeZonas(
         t,
@@ -2532,18 +2492,10 @@ function initFixtureGeneration() {
         t,
         "EVITA_24_8x3_NORMAL_5D_2C"
       );
-
       if (!matchesBase || !matchesBase.length) {
         // generarPartidosDesdeModeloEvita ya avisa si algo falla
         return;
       }
-
-      console.log(
-        "DEBUG ESPECIAL-8x3 → equipos:",
-        t.teams.length,
-        "partidos generados (antes de ordenar):",
-        matchesBase.length
-      );
     } else if (t.format.type === "eliminacion") {
       const ids = t.teams.map((e) => e.id);
       matchesBase = generarLlavesEliminacion(ids, {
@@ -2554,57 +2506,59 @@ function initFixtureGeneration() {
       return;
     }
 
-    // IDs numéricos globales
+    // IDs numéricos globales (1, 2, 3, …) y actualización de GP/PP
     matchesBase = renumerarPartidosConIdsNumericos(matchesBase);
 
-    // =====================================================
-    //  Reparto equilibrado de Fase 1 (8x3 → mitad día 1, mitad día 2)
-    //  - Sólo aplica al formato especial-8x3
-    //  - Marca preferredDayIndex para que el scheduler respete el día
-    // =====================================================
-    if (
-      t.format.type === "especial-8x3" &&
-      Array.isArray(matchesBase) &&
-      matchesBase.length &&
-      matchesBase.some((m) => (m.phase || "").includes("Fase 1"))
-    ) {
-      const fase1 = matchesBase.filter((m) =>
-        (m.phase || "").includes("Fase 1")
-      );
-      const otros = matchesBase.filter(
-        (m) => !(m.phase || "").includes("Fase 1")
+    // ----------------------
+    // Regla especial modelo 24 · 8×3 (Evita)
+    // - Día 1: zonas A–D
+    // - Día 2: zonas E–H
+    // - Día 3+: A1/A2 + puestos 1–24
+    // ----------------------
+    if (t.format.type === "especial-8x3") {
+      const tieneFase1 = matchesBase.some(
+        (m) => (m.phase || "").indexOf("Fase 1") !== -1
       );
 
-      // Ordenar por zona y ronda
-      fase1.sort((a, b) => {
-        const za = a.zone || "";
-        const zb = b.zone || "";
-        if (za < zb) return -1;
-        if (za > zb) return 1;
-        const ra = a.round || 0;
-        const rb = b.round || 0;
-        return ra - rb;
-      });
+      if (tieneFase1) {
+        const fase1 = [];
+        const otros = [];
+        matchesBase.forEach((m) => {
+          if ((m.phase || "").indexOf("Fase 1") !== -1) fase1.push(m);
+          else otros.push(m);
+        });
 
-      // Mitad y mitad
-      const mitad = Math.ceil(fase1.length / 2);
-      const fase1_dia1 = fase1.slice(0, mitad);
-      const fase1_dia2 = fase1.slice(mitad);
+        // Reparto por zonas:
+        // - Zonas A, B, C, D → Día 1 (index 0)
+        // - Zonas E, F, G, H → Día 2 (index 1)
+        fase1.forEach((m) => {
+          const z = (m.zone || "").trim();
+          const letra = z ? z[z.length - 1].toUpperCase() : "";
+          if (["A", "B", "C", "D"].indexOf(letra) !== -1) {
+            m.preferredDayIndex = 0;
+          } else if (["E", "F", "G", "H"].indexOf(letra) !== -1) {
+            m.preferredDayIndex = 1;
+          }
+        });
 
-      // Día preferido para el scheduler
-      fase1_dia1.forEach((m) => (m.preferredDayIndex = 0)); // Día 1
-      fase1_dia2.forEach((m) => (m.preferredDayIndex = 1)); // Día 2
-
-      matchesBase = [].concat(fase1_dia1, fase1_dia2, otros);
+        // El resto de las fases no puede jugarse antes del Día 3
+        if (dayConfigsFromState.length >= 3) {
+          otros.forEach((m) => {
+            m.minDayIndex = 2; // índice 2 = Día 3
+          });
+        }
+      }
     }
 
+    // ----------------------
     // Asignar fechas / horas / canchas
+    // ----------------------
     const matches = asignarHorarios(matchesBase, scheduleOptions);
     t.matches = matches;
 
-    // Guardar última configuración de días para reabrir luego
+    // Guardar última configuración de días
     t.schedule = t.schedule || {};
-    t.schedule.dayConfigs = (dayConfigsFromState || []).map((dc) =>
+    t.schedule.dayConfigs = dayConfigsFromState.map((dc) =>
       Object.assign({}, dc)
     );
 
@@ -2614,99 +2568,6 @@ function initFixtureGeneration() {
   });
 }
 
-
-function renderFixtureResult() {
-  const container = document.getElementById("fixture-result");
-  if (!container) return;
-  const t = appState.currentTournament;
-  if (!t) return;
-  container.innerHTML = "";
-
-  if (!t.matches || !t.matches.length) {
-    container.textContent = "Todavía no hay partidos generados.";
-    return;
-  }
-
-  const teamById = {};
-  t.teams.forEach((team) => {
-    teamById[team.id] = team;
-  });
-
-  const fieldById = {};
-  t.fields.forEach((f) => {
-    fieldById[f.id] = f;
-  });
-
-  const table = document.createElement("table");
-  table.className = "fixture-table";
-
-  const thead = document.createElement("thead");
-  thead.innerHTML =
-    "<tr>" +
-    "<th>#</th>" +
-    "<th>ID</th>" +
-    "<th>Zona</th>" +
-    "<th>Fecha</th>" +
-    "<th>Hora</th>" +
-    "<th>Cancha</th>" +
-    "<th>Partido</th>" +
-    "<th>Fase / Ronda</th>" +
-    "</tr>";
-  table.appendChild(thead);
-
-  const tbody = document.createElement("tbody");
-
-  t.matches.forEach((m, idx) => {
-    const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
-    const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
-
-    const homeLabel = home ? home.shortName : m.homeSeed || "?";
-    const awayLabel = away ? away.shortName : m.awaySeed || "?";
-
-    const field =
-      m.fieldId && fieldById[m.fieldId] ? fieldById[m.fieldId].name : m.fieldId;
-
-    const phaseRoundLabel =
-      (m.phase || "") +
-      " (R" +
-      (m.round || "-") +
-      (m.code ? " · " + m.code : "") +
-      ")";
-
-    const tr = document.createElement("tr");
-    tr.innerHTML =
-      "<td>" +
-      (idx + 1) +
-      "</td>" +
-      "<td>" +
-      (m.code || "-") +
-      "</td>" +
-      "<td>" +
-      (m.zone || "-") +
-      "</td>" +
-      "<td>" +
-      (m.date || "-") +
-      "</td>" +
-      "<td>" +
-      (m.time || "-") +
-      "</td>" +
-      "<td>" +
-      (field || "-") +
-      "</td>" +
-      "<td>" +
-      homeLabel +
-      " vs " +
-      awayLabel +
-      "</td>" +
-      "<td>" +
-      phaseRoundLabel +
-      "</td>";
-    tbody.appendChild(tr);
-  });
-
-  table.appendChild(tbody);
-  container.appendChild(table);
-}
 
 // =====================
 //  STEP 6: REPORTES / EXPORTAR
