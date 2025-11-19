@@ -11,7 +11,7 @@
 // =====================
 // MODELOS EVITA (24 equipos)
 // =====================
-//lala//
+
 
 const EVITA_MODELS = {
   EVITA_24_8x3_NORMAL_5D_2C: {
@@ -96,8 +96,7 @@ function generarPartidosDesdeModeloEvita(torneo, modeloId) {
     // - ordenarMatchesEspecial8x3(...) los ordena "al estilo Evita" (zonas primero, finales al final)
     const base = generarEspecial8x3(torneo);
     if (!base || !base.length) return [];
-const baseOrdenada = ordenarMatchesEspecial8x3(base);
-return aplicarDistribucionEspecial8x3(baseOrdenada, modeloId);
+    return ordenarMatchesEspecial8x3(base);
   }
 
   // Para otros modelos que agreguemos más adelante:
@@ -1425,34 +1424,6 @@ function generarEspecial8x3(t) {
 //  SCHEDULER BÁSICO (ASIGNAR FECHAS / HORAS / CANCHAS)
 //  Versión slot-driven + días preferidos / mínimos
 // =====================
-// =====================
-//  AJUSTE DE DISTRIBUCIÓN · MODELO 24 equipos 8×3
-// =====================
-function aplicarDistribucionEspecial8x3(matches, modeloId) {
-  if (modeloId !== "EVITA_24_8x3_NORMAL_5D_2C") return matches;
-
-  // 1️⃣ Dividimos las zonas A–H en 2 grupos
-  const fase1 = matches.filter(m => (m.phase || "").includes("Fase 1"));
-  const otras = matches.filter(m => !(m.phase || "").includes("Fase 1"));
-
-  fase1.forEach(m => {
-    const zona = (m.zone || "").trim();
-    const letra = zona.slice(-1).toUpperCase();
-    if (["A", "B", "C", "D"].includes(letra)) {
-      m.preferredDayIndex = 0; // Día 1 (índice 0)
-    } else if (["E", "F", "G", "H"].includes(letra)) {
-      m.preferredDayIndex = 1; // Día 2 (índice 1)
-    }
-  });
-
-  // 2️⃣ Resto de fases (A1, A2, 9–16, 17–24, 1–8) → mínimo Día 3
-  otras.forEach(m => {
-    m.minDayIndex = 2; // Día 3 en adelante
-  });
-
-  return fase1.concat(otras);
-}
-
 function asignarHorarios(matches, options = {}) {
   if (!matches || !matches.length) return matches || [];
 
@@ -1521,23 +1492,7 @@ function asignarHorarios(matches, options = {}) {
       }
     }
   }
-}
 
-  // 🔧 AJUSTE: sacar del scheduler los días marcados como "No se juega"
-  dayConfigs = dayConfigs.filter(dc =>
-    (dc.type || "").toLowerCase() !== "no se juega"
-  );
-
-  if (!dayConfigs.length) {
-    console.warn("[asignarHorarios] dayConfigs vacío; no se pueden generar slots");
-    return matches.map(m =>
-      Object.assign({}, m, { date: null, time: null, fieldId: null })
-    );
-  }
-  // 🔧 AJUSTE: quitar días marcados como "No se juega"
-  dayConfigs = dayConfigs.filter(dc =>
-    (dc.type || "").toLowerCase() !== "no se juega"
-  );
   if (!dayConfigs.length) {
     console.warn(
       "[asignarHorarios] dayConfigs vacío; no se pueden generar slots"
@@ -2508,7 +2463,7 @@ function initFixtureGeneration() {
     t.matchDurationMinutes = matchDurationMinutes;
     t.restMinMinutes = restMinMinutes;
 
-        // 👉 Puente entre t.dayConfigs (tabla de días) y t.schedule.dayConfigs
+    // 👉 Puente entre t.dayConfigs (tabla de días) y t.schedule.dayConfigs
     const dayConfigsFromState =
       (Array.isArray(t.dayConfigs) && t.dayConfigs.length)
         ? t.dayConfigs
@@ -2517,11 +2472,6 @@ function initFixtureGeneration() {
            t.schedule.dayConfigs.length
           ? t.schedule.dayConfigs
           : []);
-
-    // 🔧 NUEVO: lista sólo de días jugables (excluye "off" / "No se juega")
-    const playableDayConfigs = (dayConfigsFromState || []).filter(
-      (dc) => dc && dc.type !== "off"
-    );
 
     const scheduleOptions = {
       dateStart: t.dateStart,
@@ -2533,13 +2483,8 @@ function initFixtureGeneration() {
       fields: t.fields || [],
       breaks: t.breaks || [],
       restrictions: t.format ? t.format.restrictions : null,
-      // Usamos la lista filtrada si hay al menos un día jugable.
-      // Si por algún motivo todos fueran "off", caemos a la original.
-      dayConfigs: playableDayConfigs.length
-        ? playableDayConfigs
-        : dayConfigsFromState,
+      dayConfigs: dayConfigsFromState,
     };
-
 
     let matchesBase = [];
 
@@ -2587,32 +2532,6 @@ function initFixtureGeneration() {
         t,
         "EVITA_24_8x3_NORMAL_5D_2C"
       );
-// --- Reparto especial de Fase 1 para modelo 8x3 ---
-// Día 1 → Zonas A–D
-// Día 2 → Zonas E–H
-if (t.format.type === "especial-8x3" && Array.isArray(matchesBase)) {
-  const fase1 = matchesBase.filter(m =>
-    (m.phase || "").includes("Fase 1")
-  );
-  const otras = matchesBase.filter(m =>
-    !(m.phase || "").includes("Fase 1")
-  );
-
-  fase1.forEach(m => {
-    const z = (m.zone || "").trim().toUpperCase();
-    const letra = z[z.length - 1];
-    if (["A", "B", "C", "D"].includes(letra)) {
-      m.preferredDayIndex = 0; // Día 1
-    } else if (["E", "F", "G", "H"].includes(letra)) {
-      m.preferredDayIndex = 1; // Día 2
-    }
-  });
-
-  // Fases siguientes no antes del Día 3
-  otras.forEach(m => (m.minDayIndex = 2));
-
-  matchesBase = fase1.concat(otras);
-}
 
       if (!matchesBase || !matchesBase.length) {
         // generarPartidosDesdeModeloEvita ya avisa si algo falla
@@ -2656,6 +2575,12 @@ if (t.format.type === "especial-8x3" && Array.isArray(matchesBase)) {
         (m) => !(m.phase || "").includes("Fase 1")
       );
 
+      // Indices de días jugables (excluye "off")
+      const playableDayIndexes = [];
+      (dayConfigsFromState || []).forEach((dc, idx) => {
+        if (dc && dc.type !== "off") playableDayIndexes.push(idx);
+      });
+
       // Ordenar por zona y ronda
       fase1.sort((a, b) => {
         const za = a.zone || "";
@@ -2667,38 +2592,31 @@ if (t.format.type === "especial-8x3" && Array.isArray(matchesBase)) {
         return ra - rb;
       });
 
+      // Elegimos índices reales para los días de zonas
+      const idxDiaZonas1 =
+        playableDayIndexes.length > 0 ? playableDayIndexes[0] : 0;
+      const idxDiaZonas2 =
+        playableDayIndexes.length > 1 ? playableDayIndexes[1] : idxDiaZonas1;
+
       // Mitad y mitad
       const mitad = Math.ceil(fase1.length / 2);
       const fase1_dia1 = fase1.slice(0, mitad);
       const fase1_dia2 = fase1.slice(mitad);
 
       // Día preferido para el scheduler
-      fase1_dia1.forEach((m) => (m.preferredDayIndex = 0)); // Día 1
-      fase1_dia2.forEach((m) => (m.preferredDayIndex = 1)); // Día 2
-  // El resto de las fases (A1/A2, 9–16, 17–24, 1–8) recién desde el Día 3
-  otros.forEach((m) => (m.minDayIndex = 2)); // 2 = índice del Día 3
+      fase1_dia1.forEach((m) => (m.preferredDayIndex = idxDiaZonas1));
+      fase1_dia2.forEach((m) => (m.preferredDayIndex = idxDiaZonas2));
+
+      // Fases posteriores: mínimo tercer día jugable (si existe)
+      if (playableDayIndexes.length > 2) {
+        const idxMinOtros = playableDayIndexes[2];
+        otros.forEach((m) => {
+          m.minDayIndex = idxMinOtros;
+        });
+      }
 
       matchesBase = [].concat(fase1_dia1, fase1_dia2, otros);
     }
-// ------------------------------
-// FIX: Ordenar partidos del modelo 8x3 antes de asignar horarios
-// ------------------------------
-if (t.format.type === "especial-8x3" && Array.isArray(matchesBase)) {
-  // Orden de prioridad de programación:
-  // 1. Fase 1 (zonas)
-  // 2. Otras fases
-  matchesBase.sort((a, b) => {
-    const faseA = (a.phase || "").includes("Fase 1") ? 0 : 1;
-    const faseB = (b.phase || "").includes("Fase 1") ? 0 : 1;
-    if (faseA !== faseB) return faseA - faseB;
-
-    // Dentro de Fase 1, asegurar que A–D vayan antes que E–H
-    const zonaA = (a.zone || "").trim().slice(-1).toUpperCase();
-    const zonaB = (b.zone || "").trim().slice(-1).toUpperCase();
-    const ordenZonas = ["A","B","C","D","E","F","G","H"];
-    return ordenZonas.indexOf(zonaA) - ordenZonas.indexOf(zonaB);
-  });
-}
 
     // Asignar fechas / horas / canchas
     const matches = asignarHorarios(matchesBase, scheduleOptions);
