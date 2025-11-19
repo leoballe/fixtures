@@ -2508,7 +2508,7 @@ function initFixtureGeneration() {
     t.matchDurationMinutes = matchDurationMinutes;
     t.restMinMinutes = restMinMinutes;
 
-    // 👉 Puente entre t.dayConfigs (tabla de días) y t.schedule.dayConfigs
+        // 👉 Puente entre t.dayConfigs (tabla de días) y t.schedule.dayConfigs
     const dayConfigsFromState =
       (Array.isArray(t.dayConfigs) && t.dayConfigs.length)
         ? t.dayConfigs
@@ -2517,6 +2517,11 @@ function initFixtureGeneration() {
            t.schedule.dayConfigs.length
           ? t.schedule.dayConfigs
           : []);
+
+    // 🔧 NUEVO: lista sólo de días jugables (excluye "off" / "No se juega")
+    const playableDayConfigs = (dayConfigsFromState || []).filter(
+      (dc) => dc && dc.type !== "off"
+    );
 
     const scheduleOptions = {
       dateStart: t.dateStart,
@@ -2528,8 +2533,13 @@ function initFixtureGeneration() {
       fields: t.fields || [],
       breaks: t.breaks || [],
       restrictions: t.format ? t.format.restrictions : null,
-      dayConfigs: dayConfigsFromState,
+      // Usamos la lista filtrada si hay al menos un día jugable.
+      // Si por algún motivo todos fueran "off", caemos a la original.
+      dayConfigs: playableDayConfigs.length
+        ? playableDayConfigs
+        : dayConfigsFromState,
     };
+
 
     let matchesBase = [];
 
