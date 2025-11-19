@@ -2561,6 +2561,32 @@ function initFixtureGeneration() {
         t,
         "EVITA_24_8x3_NORMAL_5D_2C"
       );
+// --- Reparto especial de Fase 1 para modelo 8x3 ---
+// Día 1 → Zonas A–D
+// Día 2 → Zonas E–H
+if (t.format.type === "especial-8x3" && Array.isArray(matchesBase)) {
+  const fase1 = matchesBase.filter(m =>
+    (m.phase || "").includes("Fase 1")
+  );
+  const otras = matchesBase.filter(m =>
+    !(m.phase || "").includes("Fase 1")
+  );
+
+  fase1.forEach(m => {
+    const z = (m.zone || "").trim().toUpperCase();
+    const letra = z[z.length - 1];
+    if (["A", "B", "C", "D"].includes(letra)) {
+      m.preferredDayIndex = 0; // Día 1
+    } else if (["E", "F", "G", "H"].includes(letra)) {
+      m.preferredDayIndex = 1; // Día 2
+    }
+  });
+
+  // Fases siguientes no antes del Día 3
+  otras.forEach(m => (m.minDayIndex = 2));
+
+  matchesBase = fase1.concat(otras);
+}
 
       if (!matchesBase || !matchesBase.length) {
         // generarPartidosDesdeModeloEvita ya avisa si algo falla
