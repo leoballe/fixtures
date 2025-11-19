@@ -1454,12 +1454,6 @@ function aplicarDistribucionEspecial8x3(matches, modeloId) {
 }
 
 function asignarHorarios(matches, options = {}) {
-  // --- AJUSTE: saltar días marcados como "No se juega" ---
-  const dayConfigs = (options.dayConfigs || []).filter(
-    d => (d.type || "").toLowerCase() !== "no se juega"
-  );
-  options.dayConfigs = dayConfigs;
-  
   if (!matches || !matches.length) return matches || [];
 
   // Duración y descanso (el descanso ahora es "suave")
@@ -1527,7 +1521,19 @@ function asignarHorarios(matches, options = {}) {
       }
     }
   }
+}
 
+  // 🔧 AJUSTE: sacar del scheduler los días marcados como "No se juega"
+  dayConfigs = dayConfigs.filter(dc =>
+    (dc.type || "").toLowerCase() !== "no se juega"
+  );
+
+  if (!dayConfigs.length) {
+    console.warn("[asignarHorarios] dayConfigs vacío; no se pueden generar slots");
+    return matches.map(m =>
+      Object.assign({}, m, { date: null, time: null, fieldId: null })
+    );
+  }
   if (!dayConfigs.length) {
     console.warn(
       "[asignarHorarios] dayConfigs vacío; no se pueden generar slots"
