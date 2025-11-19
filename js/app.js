@@ -1725,6 +1725,48 @@ function startNewTournament() {
   renderTeamsTable();
   renderFieldsTable();
   renderBreaksList();
+  // --- FUNCIÓN DE RENDERIZADO DE FIXTURE (faltante) ---
+function renderFixtureResult() {
+  const t = appState.currentTournament;
+  if (!t || !t.matches) return;
+
+  const out = document.getElementById("fixture-output");
+  if (!out) return;
+
+  // Limpia el contenedor
+  out.innerHTML = "";
+
+  // Muestra tabla de partidos
+  let html = `
+    <table class="fixture-table">
+      <thead>
+        <tr>
+          <th>Fecha</th><th>Hora</th><th>Cancha</th>
+          <th>Local</th><th>Visitante</th><th>Zona</th><th>Fase / Ronda</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  t.matches.forEach((m) => {
+    html += `
+      <tr>
+        <td>${m.date || ""}</td>
+        <td>${m.time || ""}</td>
+        <td>${m.fieldId || ""}</td>
+        <td>${m.local || ""}</td>
+        <td>${m.visitante || ""}</td>
+        <td>${m.zone || ""}</td>
+        <td>${m.phase || ""}</td>
+      </tr>
+    `;
+  });
+
+  html += "</tbody></table>";
+  out.innerHTML = html;
+}
+
+  
   renderFixtureResult();
   renderExportView("zone");
 }
