@@ -1534,6 +1534,10 @@ function asignarHorarios(matches, options = {}) {
       Object.assign({}, m, { date: null, time: null, fieldId: null })
     );
   }
+  // 🔧 AJUSTE: quitar días marcados como "No se juega"
+  dayConfigs = dayConfigs.filter(dc =>
+    (dc.type || "").toLowerCase() !== "no se juega"
+  );
   if (!dayConfigs.length) {
     console.warn(
       "[asignarHorarios] dayConfigs vacío; no se pueden generar slots"
