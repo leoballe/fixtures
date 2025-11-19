@@ -1454,14 +1454,6 @@ function aplicarDistribucionEspecial8x3(matches, modeloId) {
 }
 
 function asignarHorarios(matches, options = {}) {
-    // --- AJUSTE: saltar días marcados como "No se juega" ---
-  const dayConfigs = (options.dayConfigs || []).filter(
-    d => (d.type || "").toLowerCase() !== "no se juega"
-  );
-
-  // Si eliminamos días, actualizamos la lista
-  options.dayConfigs = dayConfigs;
-
   if (!matches || !matches.length) return matches || [];
 
   // Duración y descanso (el descanso ahora es "suave")
