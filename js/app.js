@@ -2876,7 +2876,29 @@ function renderExportView(mode) {
 
     const tbody = document.createElement("tbody");
 
-    grouped[key].forEach((m) => {
+    // Orden dentro de cada grupo
+    let rows = grouped[key].slice();
+    if (mode === "day") {
+      rows.sort((a, b) => {
+        const ta = a.time || "";
+        const tb = b.time || "";
+        if (ta < tb) return -1;
+        if (ta > tb) return 1;
+
+        // Desempate por cancha
+        const fa = a.fieldId || "";
+        const fb = b.fieldId || "";
+        if (fa < fb) return -1;
+        if (fa > fb) return 1;
+
+        // Desempate final por ID de partido
+        const ida = typeof a.id === "number" ? a.id : 0;
+        const idb = typeof b.id === "number" ? b.id : 0;
+        return ida - idb;
+      });
+    }
+    
+    rows.forEach((m) => {
       const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
       const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
       const homeLabel = home ? home.shortName : m.homeSeed || "?";
