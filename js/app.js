@@ -2652,6 +2652,25 @@ if (t.format.type === "especial-8x3" && Array.isArray(matchesBase)) {
 
       matchesBase = [].concat(fase1_dia1, fase1_dia2, otros);
     }
+// ------------------------------
+// FIX: Ordenar partidos del modelo 8x3 antes de asignar horarios
+// ------------------------------
+if (t.format.type === "especial-8x3" && Array.isArray(matchesBase)) {
+  // Orden de prioridad de programación:
+  // 1. Fase 1 (zonas)
+  // 2. Otras fases
+  matchesBase.sort((a, b) => {
+    const faseA = (a.phase || "").includes("Fase 1") ? 0 : 1;
+    const faseB = (b.phase || "").includes("Fase 1") ? 0 : 1;
+    if (faseA !== faseB) return faseA - faseB;
+
+    // Dentro de Fase 1, asegurar que A–D vayan antes que E–H
+    const zonaA = (a.zone || "").trim().slice(-1).toUpperCase();
+    const zonaB = (b.zone || "").trim().slice(-1).toUpperCase();
+    const ordenZonas = ["A","B","C","D","E","F","G","H"];
+    return ordenZonas.indexOf(zonaA) - ordenZonas.indexOf(zonaB);
+  });
+}
 
     // Asignar fechas / horas / canchas
     const matches = asignarHorarios(matchesBase, scheduleOptions);
