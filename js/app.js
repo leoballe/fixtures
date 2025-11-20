@@ -2537,6 +2537,157 @@ function initFixtureGeneration() {
         // generarPartidosDesdeModeloEvita ya avisa si algo falla
         return;
       }
+      if (!matchesBase || !matchesBase.length) {
+        // generarPartidosDesdeModeloEvita ya avisa si algo falla
+        return;
+      }
+
+      // ===== REORDEN ESPECIAL MODELO 24 · 8×3 =====
+      if (t.format.type === "especial-8x3") {
+        const fase1 = matchesBase.filter((m) =>
+          (m.phase || "").includes("Fase 1")
+        );
+        const otros = matchesBase.filter(
+          (m) => !(m.phase || "").includes("Fase 1")
+        );
+
+        // Zona: A..H -> índice 1..8 (Z1..Z8)
+        const letrasZona = "ABCDEFGH";
+        const getZonaIndex = (m) => {
+          const zRaw = (m.zone || "").toString().trim().toUpperCase();
+          const idx = letrasZona.indexOf(zRaw);
+          return idx >= 0 ? idx + 1 : null;
+        };
+
+        // Round numérico (1, 2, 3, etc.)
+        const getRoundNumber = (m) => {
+          if (typeof m.round === "number") return m.round;
+          const str = String(m.round || "");
+          const num = parseInt(str.replace(/\D/g, ""), 10);
+          return isNaN(num) ? 0 : num;
+        };
+
+        const keyRZ = (r, z) => r + "-" + z;
+        const mapaFase1 = {};
+
+        // Indexar cada partido de Fase 1 por (round, zona)
+        fase1.forEach((m) => {
+          const zi = getZonaIndex(m);
+          const ri = getRoundNumber(m);
+          if (!zi || !ri) return;
+          mapaFase1[keyRZ(ri, zi)] = m;
+        });
+
+        // Patrón que vos pediste
+        const patronDia1 = [
+          [1, 1], [1, 3], [1, 5], [1, 7],
+          [1, 2], [1, 4], [1, 6], [1, 8],
+          [2, 1], [2, 3], [2, 5], [2, 7],
+        ];
+        const patronDia2 = [
+          [2, 2], [2, 4], [2, 6], [2, 8],
+          [3, 1], [3, 3], [3, 5], [3, 7],
+          [3, 2], [3, 4], [3, 6], [3, 8],
+        ];
+
+        const dia1 = [];
+        const dia2 = [];
+
+        patronDia1.forEach(([r, z]) => {
+          const m = mapaFase1[keyRZ(r, z)];
+          if (m && !dia1.includes(m)) dia1.push(m);
+        });
+
+        patronDia2.forEach(([r, z]) => {
+          const m = mapaFase1[keyRZ(r, z)];
+          if (m && !dia2.includes(m)) dia2.push(m);
+        });
+
+        // Por si quedara algún partido de Fase 1 sin ubicar en el patrón
+        const yaTomados = new Set();
+        dia1.forEach((m) => yaTomados.add(m));
+        dia2.forEach((m) => yaTomados.add(m));
+        const restantesFase1 = fase1.filter((m) => !yaTomados.has(m));
+
+        // Día preferido para el scheduler
+        dia1.forEach((m) => (m.preferredDayIndex = 0)); // Día 1
+        dia2.forEach((m) => (m.preferredDayIndex = 1)); // Día 2
+
+        // A partir del Día 3 (índice 2) el resto de fases (A1, A2, B, C, etc.)
+        otros.forEach((m) => (m.minDayIndex = 2));
+
+        // --- ORDEN PARA DÍAS 3–5 (A1 → A2 → B → C por rondas) ---
+        const grupoA1 = [];
+        const grupoA2 = [];
+        const grupoB = [];
+        const grupoC = [];
+        const grupoA = [];
+        const grupoRest = [];
+
+        otros.forEach((m) => {
+          const zona = (m.zone || "").toString();
+          const fase = (m.phase || "").toString();
+          if (zona.includes("Zona A1")) grupoA1.push(m);
+          else if (zona.includes("Zona A2")) grupoA2.push(m);
+          else if (fase.includes("Puestos 1-8")) grupoA.push(m);
+          else if (fase.includes("Puestos 9-16")) grupoB.push(m);
+          else if (fase.includes("Puestos 17-24")) grupoC.push(m);
+          else grupoRest.push(m);
+        });
+
+        const getR = (m) => {
+          const r = getRoundNumber(m);
+          return r || 0;
+        };
+
+        const sortByRoundThenId = (arr) =>
+          arr.slice().sort((a, b) => {
+            const ra = getR(a);
+            const rb = getR(b);
+            if (ra !== rb) return ra - rb;
+            const ida = typeof a.id === "number" ? a.id : 0;
+            const idb = typeof b.id === "number" ? b.id : 0;
+            return ida - idb;
+          });
+
+        const a1Ord = sortByRoundThenId(grupoA1);
+        const a2Ord = sortByRoundThenId(grupoA2);
+        const bOrd = sortByRoundThenId(grupoB);
+        const cOrd = sortByRoundThenId(grupoC);
+        const aOrd = sortByRoundThenId(grupoA);
+        const restOrd = sortByRoundThenId(grupoRest);
+
+        const rounds = new Set([
+          ...a1Ord.map(getR),
+          ...a2Ord.map(getR),
+          ...bOrd.map(getR),
+          ...cOrd.map(getR),
+        ]);
+        const roundsSorted = Array.from(rounds)
+          .filter((r) => r > 0)
+          .sort((a, b) => a - b);
+
+        const otrosOrdenados = [];
+        roundsSorted.forEach((r) => {
+          otrosOrdenados.push(...a1Ord.filter((m) => getR(m) === r));
+          otrosOrdenados.push(...a2Ord.filter((m) => getR(m) === r));
+          otrosOrdenados.push(...bOrd.filter((m) => getR(m) === r));
+          otrosOrdenados.push(...cOrd.filter((m) => getR(m) === r));
+        });
+
+        // Al final, llaves A (puestos 1-8) y lo que sobre
+        otrosOrdenados.push(...aOrd, ...restOrd);
+
+        // Nuevo orden total
+        matchesBase = [].concat(dia1, dia2, restantesFase1, otrosOrdenados);
+      }
+
+      console.log(
+        "DEBUG ESPECIAL-8x3 → equipos:",
+        t.teams.length,
+        "partidos generados (antes de ordenar):",
+        matchesBase.length
+      );
 
       console.log(
         "DEBUG ESPECIAL-8x3 → equipos:",
