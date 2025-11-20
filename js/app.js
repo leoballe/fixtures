@@ -2653,66 +2653,163 @@ function initFixtureGeneration() {
     // IDs numéricos globales
     matchesBase = renumerarPartidosConIdsNumericos(matchesBase);
 
-    // =====================================================
-    //  Reparto equilibrado de Fase 1 (8x3 → mitad día 1, mitad día 2)
-    //  - Sólo aplica al formato especial-8x3
-    //  - Marca preferredDayIndex para que el scheduler respete el día
-    // =====================================================
-    if (
-      t.format.type === "especial-8x3" &&
-      Array.isArray(matchesBase) &&
-      matchesBase.length &&
-      matchesBase.some((m) => (m.phase || "").includes("Fase 1"))
-    ) {
-      const fase1 = matchesBase.filter((m) =>
-        (m.phase || "").includes("Fase 1")
-      );
-      const otros = matchesBase.filter(
-        (m) => !(m.phase || "").includes("Fase 1")
-      );
+// =====================================================
+//  Reparto especial Fase 1 (EVITA 8x3 → patrón días 1 y 2)
+//  - Sólo aplica al formato especial-8x3
+//  - Marca preferredDayIndex para que el scheduler respete el día
+// =====================================================
+if (
+  t.format.type === "especial-8x3" &&
+  Array.isArray(matchesBase) &&
+  matchesBase.length &&
+  matchesBase.some((m) => (m.phase || "").includes("Fase 1"))
+) {
+  const fase1 = matchesBase.filter((m) =>
+    (m.phase || "").includes("Fase 1")
+  );
+  const otros = matchesBase.filter(
+    (m) => !(m.phase || "").includes("Fase 1")
+  );
 
-      // Indices de días jugables (excluye "off")
-      const playableDayIndexes = [];
-      (dayConfigsFromState || []).forEach((dc, idx) => {
-        if (dc && dc.type !== "off") playableDayIndexes.push(idx);
+  // Índices de días jugables (excluye "off")
+  const playableDayIndexes = [];
+  (dayConfigsFromState || []).forEach((dc, idx) => {
+    if (dc && dc.type !== "off") playableDayIndexes.push(idx);
+  });
+
+  // --- Reordenar Fase 1 según patrón EVITA ---
+  let fase1Ordenada = fase1.slice();
+
+  const ordenarZonaRonda = (a, b) => {
+    const za = a.zone || "";
+    const zb = b.zone || "";
+    if (za < zb) return -1;
+    if (za > zb) return 1;
+    const ra = a.round || 0;
+    const rb = b.round || 0;
+    return ra - rb;
+  };
+
+  try {
+    const zonesSet = new Set();
+    const roundsSet = new Set();
+
+    fase1.forEach((m) => {
+      if (m.zone) zonesSet.add(m.zone);
+      if (typeof m.round === "number") roundsSet.add(m.round);
+    });
+
+    const zones = Array.from(zonesSet).sort((a, b) =>
+      ("" + a).localeCompare("" + b, "es", {
+        numeric: true,
+        sensitivity: "base",
+      })
+    );
+    const rounds = Array.from(roundsSet).sort((a, b) => a - b);
+
+    // Solo aplicamos el patrón si tenemos realmente 8 zonas y 3 rondas
+    if (zones.length === 8 && rounds.length >= 3) {
+      const zoneRoundMap = {};
+
+      fase1.forEach((m) => {
+        const z = m.zone || "";
+        const r = m.round || 1;
+        if (!zoneRoundMap[z]) zoneRoundMap[z] = {};
+        if (!zoneRoundMap[z][r]) zoneRoundMap[z][r] = [];
+        zoneRoundMap[z][r].push(m);
       });
 
-      // Ordenar por zona y ronda
-      fase1.sort((a, b) => {
-        const za = a.zone || "";
-        const zb = b.zone || "";
-        if (za < zb) return -1;
-        if (za > zb) return 1;
-        const ra = a.round || 0;
-        const rb = b.round || 0;
-        return ra - rb;
+      const [z1, z2, z3, z4, z5, z6, z7, z8] = zones;
+
+      const patron = [
+        // Día 1
+        { r: 1, z: z1 },
+        { r: 1, z: z3 },
+        { r: 1, z: z5 },
+        { r: 1, z: z7 },
+        { r: 1, z: z2 },
+        { r: 1, z: z4 },
+        { r: 1, z: z6 },
+        { r: 1, z: z8 },
+        { r: 2, z: z1 },
+        { r: 2, z: z3 },
+        { r: 2, z: z5 },
+        { r: 2, z: z7 },
+        // Día 2
+        { r: 2, z: z2 },
+        { r: 2, z: z4 },
+        { r: 2, z: z6 },
+        { r: 2, z: z8 },
+        { r: 3, z: z1 },
+        { r: 3, z: z3 },
+        { r: 3, z: z5 },
+        { r: 3, z: z7 },
+        { r: 3, z: z2 },
+        { r: 3, z: z4 },
+        { r: 3, z: z6 },
+        { r: 3, z: z8 },
+      ];
+
+      const usados = new Set();
+      const ordered = [];
+
+      patron.forEach(({ r, z }) => {
+        const lista =
+          zoneRoundMap[z] && zoneRoundMap[z][r]
+            ? zoneRoundMap[z][r]
+            : null;
+        if (lista && lista.length) {
+          const m = lista.shift();
+          ordered.push(m);
+          if (m.id != null) usados.add(m.id);
+        }
       });
 
-      // Elegimos índices reales para los días de zonas
-      const idxDiaZonas1 =
-        playableDayIndexes.length > 0 ? playableDayIndexes[0] : 0;
-      const idxDiaZonas2 =
-        playableDayIndexes.length > 1 ? playableDayIndexes[1] : idxDiaZonas1;
+      // Por seguridad, si quedara algún partido de Fase 1 sin ubicar, lo agregamos al final
+      fase1.forEach((m) => {
+        if (m.id == null || !usados.has(m.id)) {
+          ordered.push(m);
+        }
+      });
 
-      // Mitad y mitad
-      const mitad = Math.ceil(fase1.length / 2);
-      const fase1_dia1 = fase1.slice(0, mitad);
-      const fase1_dia2 = fase1.slice(mitad);
-
-      // Día preferido para el scheduler
-      fase1_dia1.forEach((m) => (m.preferredDayIndex = idxDiaZonas1));
-      fase1_dia2.forEach((m) => (m.preferredDayIndex = idxDiaZonas2));
-
-      // Fases posteriores: mínimo tercer día jugable (si existe)
-      if (playableDayIndexes.length > 2) {
-        const idxMinOtros = playableDayIndexes[2];
-        otros.forEach((m) => {
-          m.minDayIndex = idxMinOtros;
-        });
-      }
-
-      matchesBase = [].concat(fase1_dia1, fase1_dia2, otros);
+      fase1Ordenada = ordered;
+    } else {
+      // Fallback: el viejo criterio zona+ronda
+      fase1Ordenada.sort(ordenarZonaRonda);
     }
+  } catch (e) {
+    console.warn("No se pudo aplicar patrón especial Fase 1 (EVITA 8x3):", e);
+    fase1Ordenada = fase1.slice().sort(ordenarZonaRonda);
+  }
+
+  // Elegimos índices reales para los días de zonas
+  const idxDiaZonas1 =
+    playableDayIndexes.length > 0 ? playableDayIndexes[0] : 0;
+  const idxDiaZonas2 =
+    playableDayIndexes.length > 1 ? playableDayIndexes[1] : idxDiaZonas1;
+
+  // Mitad y mitad: primeros 12 partidos -> Día 1, siguientes 12 -> Día 2
+  const mitad = Math.ceil(fase1Ordenada.length / 2);
+  const fase1_dia1 = fase1Ordenada.slice(0, mitad);
+  const fase1_dia2 = fase1Ordenada.slice(mitad);
+
+  // Día preferido para el scheduler
+  fase1_dia1.forEach((m) => (m.preferredDayIndex = idxDiaZonas1));
+  fase1_dia2.forEach((m) => (m.preferredDayIndex = idxDiaZonas2));
+
+  // Fases posteriores: mínimo tercer día jugable (si existe)
+  if (playableDayIndexes.length > 2) {
+    const idxMinOtros = playableDayIndexes[2];
+    otros.forEach((m) => {
+      m.minDayIndex = idxMinOtros;
+    });
+  }
+
+  // Actualizamos base: primero Fase 1 (en orden especial), luego el resto
+  matchesBase = [].concat(fase1_dia1, fase1_dia2, otros);
+}
+
+    
 
     // Asignar fechas / horas / canchas
     const matches = asignarHorarios(matchesBase, scheduleOptions);
