@@ -2612,26 +2612,7 @@ function initFixtureGeneration() {
         // Día preferido para el scheduler
         dia1.forEach((m) => (m.preferredDayIndex = 0)); // Día 1
         dia2.forEach((m) => (m.preferredDayIndex = 1)); // Día 2
-// Forzar el orden global de Fase 1 según patrón exacto
-        const ordenFase1 = [].concat(dia1, dia2, restantesFase1);
 
-        // A partir del Día 3 (índice 2) el resto de fases (A1, A2, B, C, etc.)
-        otros.forEach((m) => (m.minDayIndex = 2));
-
-        // Mantener el orden de rondas por fase para los días 3-5
-        const otrosOrdenados = [];
-        roundsSorted.forEach((r) => {
-          otrosOrdenados.push(...a1Ord.filter((m) => getR(m) === r));
-          otrosOrdenados.push(...a2Ord.filter((m) => getR(m) === r));
-          otrosOrdenados.push(...bOrd.filter((m) => getR(m) === r));
-          otrosOrdenados.push(...cOrd.filter((m) => getR(m) === r));
-        });
-
-        otrosOrdenados.push(...aOrd, ...restOrd);
-
-        // Nuevo orden total de partidos
-        matchesBase = [].concat(ordenFase1, otrosOrdenados);
-        
         // A partir del Día 3 (índice 2) el resto de fases (A1, A2, B, C, etc.)
         otros.forEach((m) => (m.minDayIndex = 2));
 
