@@ -768,59 +768,32 @@ function ordenarMatchesEspecial8x3(matches) {
   const fase1 = [];
   const fase2A1 = [];
   const fase2A2 = [];
-  const fase2Otros = [];
+  const puestos9_16 = [];
+  const puestos17_24 = [];
   const puestos1_8 = [];
-  const p9_16_r1 = [];
-  const p9_16_r2 = [];
-  const p9_16_r3 = [];
-  const p17_24_r1 = [];
-  const p17_24_r2 = [];
-  const p17_24_r3 = [];
   const otros = [];
 
-  // Clasificamos todos los partidos por fase / zona / ronda
   matches.forEach((m) => {
     const phase = m.phase || "";
-
-    if (phase.indexOf("Fase 1") !== -1) {
-      // Zonas regulares 8×3
+    if (phase.indexOf("Fase 1 · zonas") !== -1) {
       fase1.push(m);
-    } else if (phase.indexOf("Fase 2") !== -1) {
-      // Zonas A1 / A2
-      if (m.zone === "Zona A1") {
-        fase2A1.push(m);
-      } else if (m.zone === "Zona A2") {
-        fase2A2.push(m);
-      } else {
-        fase2Otros.push(m);
-      }
+    } else if (phase.indexOf("Fase 2 · Zona A1") !== -1) {
+      fase2A1.push(m);
+    } else if (phase.indexOf("Fase 2 · Zona A2") !== -1) {
+      fase2A2.push(m);
+    } else if (phase === "Puestos 9-16") {
+      puestos9_16.push(m);
+    } else if (phase === "Puestos 17-24") {
+      puestos17_24.push(m);
     } else if (phase === "Puestos 1-8") {
       puestos1_8.push(m);
-    } else if (phase === "Puestos 9-16") {
-      if (m.round === 1) p9_16_r1.push(m);
-      else if (m.round === 2) p9_16_r2.push(m);
-      else p9_16_r3.push(m);
-    } else if (phase === "Puestos 17-24") {
-      if (m.round === 1) p17_24_r1.push(m);
-      else if (m.round === 2) p17_24_r2.push(m);
-      else p17_24_r3.push(m);
     } else {
       otros.push(m);
     }
   });
 
-  // ===================================================
-  // 1) FASE 1 — ZONAS 8×3
-  // Patrón Día 1 y Día 2:
-  // Día 1:
-  //   R1 Z1, Z3, Z5, Z7, Z2, Z4, Z6, Z8
-  //   R2 Z1, Z3, Z5, Z7
-  // Día 2:
-  //   R2 Z2, Z4, Z6, Z8
-  //   R3 Z1, Z3, Z5, Z7, Z2, Z4, Z6, Z8
-  // ===================================================
-
-  let fase1Ordenada = fase1.slice(); // fallback
+  // ---- FASE 1: reordenar para patrón Día 1 / Día 2 ----
+  let fase1Ordenada = fase1.slice();
 
   try {
     const zonesSet = new Set();
@@ -839,10 +812,9 @@ function ordenarMatchesEspecial8x3(matches) {
     );
     const rounds = Array.from(roundsSet).sort((a, b) => a - b);
 
-    // Solo aplicamos el patrón si detectamos exactamente 8 zonas y al menos 3 rondas
+    // Solo aplico el patrón si realmente tengo 8 zonas y al menos 3 rondas
     if (zones.length === 8 && rounds.length >= 3) {
       const zoneRoundMap = {};
-
       fase1.forEach((m) => {
         const z = m.zone;
         const r = m.round || 1;
@@ -853,8 +825,9 @@ function ordenarMatchesEspecial8x3(matches) {
 
       const [z1, z2, z3, z4, z5, z6, z7, z8] = zones;
 
-      const patronFase1 = [
-        // Día 1
+      // 24 partidos: R1 todas las zonas, luego R2 según patrón, luego R3
+      const patron = [
+        // Día 1 – R1 Z1,3,5,7,2,4,6,8 y R2 Z1,3,5,7
         { r: 1, z: z1 },
         { r: 1, z: z3 },
         { r: 1, z: z5 },
@@ -867,7 +840,7 @@ function ordenarMatchesEspecial8x3(matches) {
         { r: 2, z: z3 },
         { r: 2, z: z5 },
         { r: 2, z: z7 },
-        // Día 2
+        // Día 2 – resto R2 y toda R3 en el mismo patrón
         { r: 2, z: z2 },
         { r: 2, z: z4 },
         { r: 2, z: z6 },
@@ -883,38 +856,32 @@ function ordenarMatchesEspecial8x3(matches) {
       ];
 
       const usados = new Set();
-      const fase1Result = [];
+      const ordered = [];
 
-      patronFase1.forEach(({ r, z }) => {
-        const lista = zoneRoundMap[z] && zoneRoundMap[z][r];
-        if (lista && lista.length) {
-          const m = lista.shift();
-          fase1Result.push(m);
-          if (m.id) usados.add(m.id);
+      patron.forEach(({ r, z }) => {
+        const arr = zoneRoundMap[z] && zoneRoundMap[z][r];
+        if (arr && arr.length) {
+          const m = arr.shift();
+          ordered.push(m);
+          if (m.id != null) usados.add(m.id);
         }
       });
 
-      // Por seguridad, si quedara algún partido sin usar, lo agregamos al final
+      // Si quedara algún partido de fase 1 sin ubicar, lo agrego al final
       fase1.forEach((m) => {
-        if (m.id && !usados.has(m.id)) {
-          fase1Result.push(m);
+        if (m.id == null || !usados.has(m.id)) {
+          ordered.push(m);
         }
       });
 
-      fase1Ordenada = fase1Result;
+      fase1Ordenada = ordered;
     }
   } catch (e) {
     console.warn("No se pudo aplicar patrón especial Fase 1 8×3:", e);
   }
 
-  // ===================================================
-  // 2) FASE 2 A1/A2 + LLAVES B (9–16) y C (17–24), RONDAS 1 y 2
-  // Patrón:
-  //  - Bloque R1: R1 A1, R1 A2, R1 9–16, R1 17–24
-  //  - Bloque R2: R2 A1, R2 A2, R2 9–16, R2 17–24
-  // ===================================================
-
-  const groupByRound = (arr) => {
+  // ----- Helpers para fases siguientes -----
+  function groupByRound(arr) {
     const map = {};
     arr.forEach((m) => {
       const r = m.round || 1;
@@ -922,73 +889,64 @@ function ordenarMatchesEspecial8x3(matches) {
       map[r].push(m);
     });
     return map;
-  };
+  }
 
   const a1ByRound = groupByRound(fase2A1);
   const a2ByRound = groupByRound(fase2A2);
+  const p9ByRound = groupByRound(puestos9_16);
+  const p17ByRound = groupByRound(puestos17_24);
 
-  const bloqueR1 = []
-    .concat(a1ByRound[1] || [])
-    .concat(a2ByRound[1] || [])
-    .concat(p9_16_r1)
-    .concat(p17_24_r1);
+  const a1_r1 = a1ByRound[1] || [];
+  const a1_r2 = a1ByRound[2] || [];
+  const a1_r3 = a1ByRound[3] || [];
 
-  const bloqueR2 = []
-    .concat(a1ByRound[2] || [])
-    .concat(a2ByRound[2] || [])
-    .concat(p9_16_r2)
-    .concat(p17_24_r2);
+  const a2_r1 = a2ByRound[1] || [];
+  const a2_r2 = a2ByRound[2] || [];
+  const a2_r3 = a2ByRound[3] || [];
 
-  // ===================================================
-  // 3) RESTO FASE 2 (R3 A1/A2) — antes de las definiciones finales
-  // ===================================================
+  const p9_r1 = p9ByRound[1] || [];
+  const p9_r2 = p9ByRound[2] || [];
+  const p9_r3 = p9ByRound[3] || [];
 
-  const restoFase2 = []
-    .concat(a1ByRound[3] || [])
-    .concat(a2ByRound[3] || [])
-    .concat(fase2Otros);
+  const p17_r1 = p17ByRound[1] || [];
+  const p17_r2 = p17ByRound[2] || [];
+  const p17_r3 = p17ByRound[3] || [];
 
-  const bloqueSemis = [].concat(restoFase2);
-
-  // ===================================================
-  // 4) BLOQUE FINALES
-  //  - Primero: últimos partidos de C (17–24, R3)
-  //  - Luego: últimos partidos de B (9–16, R3)
-  //  - Luego: Puestos 1–8, desde 7º–8º hasta 1º–2º
-  // ===================================================
-
+  // Orden para Puestos 1–8: de 7º–8º hacia 1º–2º
   let puestos1_8Ordenados = puestos1_8.slice();
   try {
     if (puestos1_8Ordenados.length === 4) {
       const extraerPos = (m) => {
-        const seed = (m.homeSeed || m.awaySeed || "").toString();
-        const match = seed.match(/^(\d+)/);
-        return match ? parseInt(match[1], 10) : 99;
+        const s = (m.homeSeed || m.awaySeed || "").toString();
+        const mRe = s.match(/^(\d+)/);
+        return mRe ? parseInt(mRe[1], 10) : 99;
       };
-
-      // Orden descendente por posición: 4,3,2,1 → 7-8, 5-6, 3-4, 1-2
       puestos1_8Ordenados.sort((a, b) => extraerPos(b) - extraerPos(a));
     }
   } catch (e) {
-    console.warn("No se pudo reordenar Puestos 1–8:", e);
+    console.warn("No se pudo ordenar Puestos 1-8:", e);
   }
 
-  const bloqueFinales = []
-    .concat(p17_24_r3)
-    .concat(p9_16_r3)
-    .concat(puestos1_8Ordenados);
-
-  // ===================================================
-  // 5) DEVOLVER TODO EN ORDEN
-  // ===================================================
-
-  return []
-    .concat(fase1Ordenada) // Días 1–2: zonas con patrón especial
-    .concat(bloqueR1)      // Día 3: R1 A1/A2 + R1 B/C
-    .concat(bloqueR2)      // Día 4: R2 A1/A2 + R2 B/C
-    .concat(bloqueSemis)   // R3 A1/A2
-    .concat(bloqueFinales) // Últimas rondas B/C + Puestos 1–8
+  // Secuencia lineal:
+  //  - Fase 1: patrón Día 1/Día 2
+  //  - R1: A1, A2, 9–16, 17–24
+  //  - R2: A1, A2, 9–16, 17–24
+  //  - R3: A1, A2, 17–24, 9–16
+  //  - Finales 1–8
+  const resultado = []
+    .concat(fase1Ordenada)
+    // Bloque R1
+    .concat(a1_r1, a2_r1, p9_r1, p17_r1)
+    // Bloque R2
+    .concat(a1_r2, a2_r2, p9_r2, p17_r2)
+    // Bloque R3
+    .concat(a1_r3, a2_r3, p17_r3, p9_r3)
+    // Finales 1–8
+    .concat(puestos1_8Ordenados)
+    // Cualquier cosa que haya quedado suelta
     .concat(otros);
+
+  return resultado;
 }
 
 
