@@ -977,20 +977,83 @@ function generarEspecial8x3(t) {
   }
 
   let totalEnZonas = 0;
+  let zonasCon3 = 0;
+  let zonasCon2 = 0;
+  const zonasInvalidas = [];
+
   for (const z of zoneNames) {
     const count = zonesMap[z].length;
     totalEnZonas += count;
-    if (count !== 3) {
+    if (count === 3) {
+      zonasCon3++;
+    } else if (count === 2) {
+      zonasCon2++;
+    } else {
+      zonasInvalidas.push({ zona: z, count });
+    }
+  }
+
+  // Zonas con menos de 2 o más de 3 equipos → error directo
+  if (zonasInvalidas.length) {
+    const detalle = zonasInvalidas
+      .map((zi) => " - Zona '" + zi.zona + "': " + zi.count + " equipos")
+      .join("\n");
+    alert(
+      "En el formato especial 8×3 sólo se permiten zonas de 2 o 3 equipos.\n" +
+        "Revisá estas zonas:\n" +
+        detalle
+    );
+    return [];
+  }
+
+  // Validamos combinaciones soportadas según el manual:
+  //  - 24 equipos: 8 zonas de 3
+  //  - 23 equipos: 7 zonas de 3 + 1 zona de 2
+  //  - 22 equipos: 6 zonas de 3 + 2 zonas de 2
+  if (totalEnZonas === 24) {
+    if (zonasCon3 !== 8 || zonasCon2 !== 0) {
       alert(
-        "El formato especial 8×3 requiere que cada zona tenga exactamente 3 equipos.\n" +
-          "La zona '" +
-          z +
-          "' tiene " +
-          count +
-          " equipos."
+        "Para 24 equipos el formato especial 8×3 requiere 8 zonas de 3 equipos.\n" +
+          "Detectadas: " +
+          zonasCon3 +
+          " zonas de 3 y " +
+          zonasCon2 +
+          " zonas de 2."
       );
       return [];
     }
+  } else if (totalEnZonas === 23) {
+    if (zonasCon3 !== 7 || zonasCon2 !== 1) {
+      alert(
+        "Para 23 equipos el formato especial 8×3 requiere 7 zonas de 3 equipos y 1 zona de 2 equipos.\n" +
+          "Detectadas: " +
+          zonasCon3 +
+          " zonas de 3 y " +
+          zonasCon2 +
+          " zonas de 2."
+      );
+      return [];
+    }
+  } else if (totalEnZonas === 22) {
+    if (zonasCon3 !== 6 || zonasCon2 !== 2) {
+      alert(
+        "Para 22 equipos el formato especial 8×3 requiere 6 zonas de 3 equipos y 2 zonas de 2 equipos.\n" +
+          "Detectadas: " +
+          zonasCon3 +
+          " zonas de 3 y " +
+          zonasCon2 +
+          " zonas de 2."
+      );
+      return [];
+    }
+  } else {
+    alert(
+      "Por ahora el formato especial 8×3 está preparado sólo para 22, 23 o 24 equipos.\n" +
+        "Equipos detectados en zonas: " +
+        totalEnZonas +
+        "."
+    );
+    return [];
   }
 
   if (totalEnZonas !== t.teams.length) {
@@ -1005,6 +1068,8 @@ function generarEspecial8x3(t) {
     return [];
   }
 
+  }
+
   const idaVuelta = !!(
     t.format &&
     t.format.liga &&
@@ -1014,14 +1079,30 @@ function generarEspecial8x3(t) {
   const allMatches = [];
 
   // ---------------------
-  // FASE 1: ZONAS INICIALES (8×3)
+   // ---------------------
+  // FASE 1: ZONAS INICIALES (8×3, con ajuste para zonas de 2 equipos)
   // ---------------------
-  const fase1 = generarFixtureZonas(zonesMap, {
-    idaVuelta: idaVuelta,
+  const fase1 = [];
+
+  zoneNames.forEach((z) => {
+    const ids = zonesMap[z];
+    if (!Array.isArray(ids) || ids.length < 2) return;
+
+    const esZonaDe2 = ids.length === 2;
+
+    // Regla del manual: en las zonas de 2 equipos se juega ida y vuelta
+    // (más allá de que el torneo esté configurado como "ida" o "ida-vuelta").
+    const idaVueltaZona = esZonaDe2 ? true : idaVuelta;
+
+    const part = generarFixtureLiga(ids, {
+      idaVuelta: idaVueltaZona,
+      zone: z,
+      phase: "Fase 1 · zonas (8×3)",
+    });
+
+    fase1.push(...part);
   });
-  fase1.forEach((m) => {
-    m.phase = "Fase 1 · zonas (8×3)";
-  });
+
   allMatches.push(...fase1);
 
   // ---------------------
