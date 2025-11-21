@@ -951,15 +951,6 @@ function generarLigaSeeds(seedLabels, options) {
 // =====================
 
 function generarEspecial8x3(t) {
-  // Si todavía no hay equipos cargados, no intentamos generar nada.
-  // Esto evita que se rompa el flujo en pasos anteriores (Paso 1 / Paso 2).
-  if (!t || !Array.isArray(t.teams) || t.teams.length === 0) {
-    console.warn(
-      "generarEspecial8x3 llamado sin equipos; se devuelve [] para no frenar el flujo."
-    );
-    return [];
-  }
-
   // Construimos el mapa de zonas desde los equipos
   const zonesMap = {};
   const teamsWithZone = new Set();
@@ -975,7 +966,6 @@ function generarEspecial8x3(t) {
     a.localeCompare(b, "es", { numeric: true, sensitivity: "base" })
   );
 
-
   if (zoneNames.length !== 8) {
     alert(
       "El formato especial 8×3 requiere exactamente 8 zonas.\n" +
@@ -987,83 +977,20 @@ function generarEspecial8x3(t) {
   }
 
   let totalEnZonas = 0;
-  let zonasCon3 = 0;
-  let zonasCon2 = 0;
-  const zonasInvalidas = [];
-
   for (const z of zoneNames) {
     const count = zonesMap[z].length;
     totalEnZonas += count;
-    if (count === 3) {
-      zonasCon3++;
-    } else if (count === 2) {
-      zonasCon2++;
-    } else {
-      zonasInvalidas.push({ zona: z, count });
-    }
-  }
-
-  // Zonas con menos de 2 o más de 3 equipos → error directo
-  if (zonasInvalidas.length) {
-    const detalle = zonasInvalidas
-      .map((zi) => " - Zona '" + zi.zona + "': " + zi.count + " equipos")
-      .join("\n");
-    alert(
-      "En el formato especial 8×3 sólo se permiten zonas de 2 o 3 equipos.\n" +
-        "Revisá estas zonas:\n" +
-        detalle
-    );
-    return [];
-  }
-
-  // Validamos combinaciones soportadas según el manual:
-  //  - 24 equipos: 8 zonas de 3
-  //  - 23 equipos: 7 zonas de 3 + 1 zona de 2
-  //  - 22 equipos: 6 zonas de 3 + 2 zonas de 2
-  if (totalEnZonas === 24) {
-    if (zonasCon3 !== 8 || zonasCon2 !== 0) {
+    if (count !== 3) {
       alert(
-        "Para 24 equipos el formato especial 8×3 requiere 8 zonas de 3 equipos.\n" +
-          "Detectadas: " +
-          zonasCon3 +
-          " zonas de 3 y " +
-          zonasCon2 +
-          " zonas de 2."
+        "El formato especial 8×3 requiere que cada zona tenga exactamente 3 equipos.\n" +
+          "La zona '" +
+          z +
+          "' tiene " +
+          count +
+          " equipos."
       );
       return [];
     }
-  } else if (totalEnZonas === 23) {
-    if (zonasCon3 !== 7 || zonasCon2 !== 1) {
-      alert(
-        "Para 23 equipos el formato especial 8×3 requiere 7 zonas de 3 equipos y 1 zona de 2 equipos.\n" +
-          "Detectadas: " +
-          zonasCon3 +
-          " zonas de 3 y " +
-          zonasCon2 +
-          " zonas de 2."
-      );
-      return [];
-    }
-  } else if (totalEnZonas === 22) {
-    if (zonasCon3 !== 6 || zonasCon2 !== 2) {
-      alert(
-        "Para 22 equipos el formato especial 8×3 requiere 6 zonas de 3 equipos y 2 zonas de 2 equipos.\n" +
-          "Detectadas: " +
-          zonasCon3 +
-          " zonas de 3 y " +
-          zonasCon2 +
-          " zonas de 2."
-      );
-      return [];
-    }
-  } else {
-    alert(
-      "Por ahora el formato especial 8×3 está preparado sólo para 22, 23 o 24 equipos.\n" +
-        "Equipos detectados en zonas: " +
-        totalEnZonas +
-        "."
-    );
-    return [];
   }
 
   if (totalEnZonas !== t.teams.length) {
@@ -1078,8 +1005,6 @@ function generarEspecial8x3(t) {
     return [];
   }
 
-  }
-
   const idaVuelta = !!(
     t.format &&
     t.format.liga &&
@@ -1089,30 +1014,14 @@ function generarEspecial8x3(t) {
   const allMatches = [];
 
   // ---------------------
-   // ---------------------
-  // FASE 1: ZONAS INICIALES (8×3, con ajuste para zonas de 2 equipos)
+  // FASE 1: ZONAS INICIALES (8×3)
   // ---------------------
-  const fase1 = [];
-
-  zoneNames.forEach((z) => {
-    const ids = zonesMap[z];
-    if (!Array.isArray(ids) || ids.length < 2) return;
-
-    const esZonaDe2 = ids.length === 2;
-
-    // Regla del manual: en las zonas de 2 equipos se juega ida y vuelta
-    // (más allá de que el torneo esté configurado como "ida" o "ida-vuelta").
-    const idaVueltaZona = esZonaDe2 ? true : idaVuelta;
-
-    const part = generarFixtureLiga(ids, {
-      idaVuelta: idaVueltaZona,
-      zone: z,
-      phase: "Fase 1 · zonas (8×3)",
-    });
-
-    fase1.push(...part);
+  const fase1 = generarFixtureZonas(zonesMap, {
+    idaVuelta: idaVuelta,
   });
-
+  fase1.forEach((m) => {
+    m.phase = "Fase 1 · zonas (8×3)";
+  });
   allMatches.push(...fase1);
 
   // ---------------------
@@ -1835,68 +1744,29 @@ function reemplazarCodigoEnSeed(seedLabel, codeMap) {
 // =====================
 
 document.addEventListener("DOMContentLoaded", () => {
-  const safeInit = (label, fn) => {
-    try {
-      if (typeof fn === "function") {
-        fn();
-      }
-    } catch (e) {
-      console.error("Error en inicialización:", label, e);
-    }
-  };
+  loadTournamentsFromLocalStorage();
+  startNewTournament();
+  initNavigation();
+  initStep1();
+  initScheduleDaysUI(); // NUEVO: inicializa la tabla de días
+  initTeamsSection();
+  initFieldsSection();
+  initBreaksSection();
+  initFormatSection();
+  initFixtureGeneration();
+  initReportsAndExport();
+  initTournamentsModal(); // NUEVO
 
-  safeInit("loadTournamentsFromLocalStorage", loadTournamentsFromLocalStorage);
-  safeInit("startNewTournament", startNewTournament);
-  safeInit("initNavigation", initNavigation);
-  safeInit("initStep1", initStep1);
-  safeInit("initScheduleDaysUI", initScheduleDaysUI); // NUEVO: inicializa la tabla de días
-  safeInit("initTeamsSection", initTeamsSection);
-  safeInit("initFieldsSection", initFieldsSection);
-  safeInit("initBreaksSection", initBreaksSection);
-  safeInit("initFormatSection", initFormatSection);
-  safeInit("initFixtureGeneration", initFixtureGeneration);
-  safeInit("initReportsAndExport", initReportsAndExport);
-  safeInit("initTournamentsModal", initTournamentsModal); // NUEVO
 });
 
 function startNewTournament() {
   appState.currentTournament = createEmptyTournament();
-
-  try {
-    syncUIFromState_step1();
-  } catch (e) {
-    console.error("Error en syncUIFromState_step1", e);
-  }
-
-  try {
-    renderTeamsTable();
-  } catch (e) {
-    console.error("Error en renderTeamsTable", e);
-  }
-
-  try {
-    renderFieldsTable();
-  } catch (e) {
-    console.error("Error en renderFieldsTable", e);
-  }
-
-  try {
-    renderBreaksList();
-  } catch (e) {
-    console.error("Error en renderBreaksList", e);
-  }
-
-  try {
-    renderFixtureResult();
-  } catch (e) {
-    console.error("Error en renderFixtureResult", e);
-  }
-
-  try {
-    renderExportView("zone");
-  } catch (e) {
-    console.error("Error en renderExportView", e);
-  }
+  syncUIFromState_step1();
+  renderTeamsTable();
+  renderFieldsTable();
+  renderBreaksList();
+  renderFixtureResult();
+  renderExportView("zone");
 }
 
 // =====================
@@ -1971,20 +1841,12 @@ function initStep1() {
 function syncUIFromState_step1() {
   const t = appState.currentTournament;
   if (!t) return;
-
-  const nameEl = document.getElementById("t-name");
-  const catEl = document.getElementById("t-category");
-  const startEl = document.getElementById("t-date-start");
-  const endEl = document.getElementById("t-date-end");
-  const storageEl = document.getElementById("t-storage-mode");
-
-  if (nameEl) nameEl.value = t.name || "";
-  if (catEl) catEl.value = t.category || "";
-  if (startEl) startEl.value = t.dateStart || "";
-  if (endEl) endEl.value = t.dateEnd || "";
-  if (storageEl) storageEl.value = t.storageMode || "local";
+  document.getElementById("t-name").value = t.name || "";
+  document.getElementById("t-category").value = t.category || "";
+  document.getElementById("t-date-start").value = t.dateStart || "";
+  document.getElementById("t-date-end").value = t.dateEnd || "";
+  document.getElementById("t-storage-mode").value = t.storageMode || "local";
 }
-
 
 // =====================
 //  STEP 2: EQUIPOS
