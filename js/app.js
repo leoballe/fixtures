@@ -951,6 +951,15 @@ function generarLigaSeeds(seedLabels, options) {
 // =====================
 
 function generarEspecial8x3(t) {
+  // Si todavía no hay equipos cargados, no intentamos generar nada.
+  // Esto evita que se rompa el flujo en pasos anteriores (Paso 1 / Paso 2).
+  if (!t || !Array.isArray(t.teams) || t.teams.length === 0) {
+    console.warn(
+      "generarEspecial8x3 llamado sin equipos; se devuelve [] para no frenar el flujo."
+    );
+    return [];
+  }
+
   // Construimos el mapa de zonas desde los equipos
   const zonesMap = {};
   const teamsWithZone = new Set();
@@ -965,6 +974,7 @@ function generarEspecial8x3(t) {
   const zoneNames = Object.keys(zonesMap).sort((a, b) =>
     a.localeCompare(b, "es", { numeric: true, sensitivity: "base" })
   );
+
 
   if (zoneNames.length !== 8) {
     alert(
