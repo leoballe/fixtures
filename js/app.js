@@ -1835,29 +1835,68 @@ function reemplazarCodigoEnSeed(seedLabel, codeMap) {
 // =====================
 
 document.addEventListener("DOMContentLoaded", () => {
-  loadTournamentsFromLocalStorage();
-  startNewTournament();
-  initNavigation();
-  initStep1();
-  initScheduleDaysUI(); // NUEVO: inicializa la tabla de días
-  initTeamsSection();
-  initFieldsSection();
-  initBreaksSection();
-  initFormatSection();
-  initFixtureGeneration();
-  initReportsAndExport();
-  initTournamentsModal(); // NUEVO
+  const safeInit = (label, fn) => {
+    try {
+      if (typeof fn === "function") {
+        fn();
+      }
+    } catch (e) {
+      console.error("Error en inicialización:", label, e);
+    }
+  };
 
+  safeInit("loadTournamentsFromLocalStorage", loadTournamentsFromLocalStorage);
+  safeInit("startNewTournament", startNewTournament);
+  safeInit("initNavigation", initNavigation);
+  safeInit("initStep1", initStep1);
+  safeInit("initScheduleDaysUI", initScheduleDaysUI); // NUEVO: inicializa la tabla de días
+  safeInit("initTeamsSection", initTeamsSection);
+  safeInit("initFieldsSection", initFieldsSection);
+  safeInit("initBreaksSection", initBreaksSection);
+  safeInit("initFormatSection", initFormatSection);
+  safeInit("initFixtureGeneration", initFixtureGeneration);
+  safeInit("initReportsAndExport", initReportsAndExport);
+  safeInit("initTournamentsModal", initTournamentsModal); // NUEVO
 });
 
 function startNewTournament() {
   appState.currentTournament = createEmptyTournament();
-  syncUIFromState_step1();
-  renderTeamsTable();
-  renderFieldsTable();
-  renderBreaksList();
-  renderFixtureResult();
-  renderExportView("zone");
+
+  try {
+    syncUIFromState_step1();
+  } catch (e) {
+    console.error("Error en syncUIFromState_step1", e);
+  }
+
+  try {
+    renderTeamsTable();
+  } catch (e) {
+    console.error("Error en renderTeamsTable", e);
+  }
+
+  try {
+    renderFieldsTable();
+  } catch (e) {
+    console.error("Error en renderFieldsTable", e);
+  }
+
+  try {
+    renderBreaksList();
+  } catch (e) {
+    console.error("Error en renderBreaksList", e);
+  }
+
+  try {
+    renderFixtureResult();
+  } catch (e) {
+    console.error("Error en renderFixtureResult", e);
+  }
+
+  try {
+    renderExportView("zone");
+  } catch (e) {
+    console.error("Error en renderExportView", e);
+  }
 }
 
 // =====================
@@ -1932,12 +1971,20 @@ function initStep1() {
 function syncUIFromState_step1() {
   const t = appState.currentTournament;
   if (!t) return;
-  document.getElementById("t-name").value = t.name || "";
-  document.getElementById("t-category").value = t.category || "";
-  document.getElementById("t-date-start").value = t.dateStart || "";
-  document.getElementById("t-date-end").value = t.dateEnd || "";
-  document.getElementById("t-storage-mode").value = t.storageMode || "local";
+
+  const nameEl = document.getElementById("t-name");
+  const catEl = document.getElementById("t-category");
+  const startEl = document.getElementById("t-date-start");
+  const endEl = document.getElementById("t-date-end");
+  const storageEl = document.getElementById("t-storage-mode");
+
+  if (nameEl) nameEl.value = t.name || "";
+  if (catEl) catEl.value = t.category || "";
+  if (startEl) startEl.value = t.dateStart || "";
+  if (endEl) endEl.value = t.dateEnd || "";
+  if (storageEl) storageEl.value = t.storageMode || "local";
 }
+
 
 // =====================
 //  STEP 2: EQUIPOS
