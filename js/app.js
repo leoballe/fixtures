@@ -3136,66 +3136,69 @@ function renderFixtureResult() {
     "</tr>";
   table.appendChild(thead);
 
-const tbody = document.createElement("tbody");
-let rowIndex = 0;
+  const tbody = document.createElement("tbody");
+  let rowIndex = 0; // numerador sólo para partidos reales
 
-t.matches.forEach((m) => {
-  if (m.isByeMatch) return; // BYE fuera de la tabla
+  t.matches.forEach((m) => {
+    // No mostramos ni numeramos partidos BYE
+    if (m.isByeMatch) return;
 
-  const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
-  const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
+    const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
+    const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
 
-  const homeLabel = home ? home.shortName : m.homeSeed || "?";
-  const awayLabel = away ? away.shortName : m.awaySeed || "?";
+    const homeLabel = home ? home.shortName : m.homeSeed || "?";
+    const awayLabel = away ? away.shortName : m.awaySeed || "?";
 
-  const field =
-    m.fieldId && fieldById[m.fieldId]
-      ? fieldById[m.fieldId].name
-      : m.fieldId || "";
+    const field =
+      m.fieldId && fieldById[m.fieldId]
+        ? fieldById[m.fieldId].name
+        : m.fieldId || "";
 
-  const phaseRoundLabel =
-    (m.phase || "") +
-    " (R" +
-    (m.round || "-") +
-    (m.code ? " · " + m.code : "") +
-    ")";
+    const phaseRoundLabel =
+      (m.phase || "") +
+      " (R" +
+      (m.round || "-") +
+      (m.code ? " · " + m.code : "") +
+      ")";
 
-  const tr = document.createElement("tr");
-  rowIndex++;
+    const tr = document.createElement("tr");
+    rowIndex++; // sólo se incrementa en partidos no-BYE
 
-  tr.innerHTML =
-    "<td>" +
-    rowIndex +
-    "</td>" +
-    "<td>" +
-    (m.zone || "") +
-    "</td>" +
-    "<td>" +
-    (m.date || "") +
-    "</td>" +
-    "<td>" +
-    (m.time || "") +
-    "</td>" +
-    "<td>" +
-    field +
-    "</td>" +
-    "<td>" +
-    homeLabel +
-    "</td>" +
-    "<td>" +
-    awayLabel +
-    "</td>" +
-    "<td>" +
-    phaseRoundLabel +
-    "</td>";
+    tr.innerHTML =
+      "<td>" +
+      rowIndex +
+      "</td>" +
+      "<td>" +
+      (m.code || "-") +
+      "</td>" +
+      "<td>" +
+      (m.zone || "-") +
+      "</td>" +
+      "<td>" +
+      (m.date || "-") +
+      "</td>" +
+      "<td>" +
+      (m.time || "-") +
+      "</td>" +
+      "<td>" +
+      (field || "-") +
+      "</td>" +
+      "<td>" +
+      homeLabel +
+      " vs " +
+      awayLabel +
+      "</td>" +
+      "<td>" +
+      phaseRoundLabel +
+      "</td>";
 
-  tbody.appendChild(tr);
-});
-
+    tbody.appendChild(tr);
+  });
 
   table.appendChild(tbody);
   container.appendChild(table);
 }
+
 
 // =====================
 //  STEP 6: REPORTES / EXPORTAR
