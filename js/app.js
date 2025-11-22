@@ -948,12 +948,14 @@ function generarLigaSeeds(seedLabels, options) {
 
 // =====================
 //  FORMATO ESPECIAL 8x3 (22–24 EQUIPOS)
+// =====================
+//  FORMATO ESPECIAL 8x3 (22–24 EQUIPOS)
 //  - 24 equipos: 8 zonas de 3
 //  - 23 equipos: 7 zonas de 3 + 1 zona de 2 (ida y vuelta en la de 2)
 //  - 22 equipos: 6 zonas de 3 + 2 zonas de 2 (ida y vuelta en las de 2)
 //  - Llave C (puestos 17–24) respeta estructura de 24 provincias.
-//    · 23 equipos  → 1 By en el primer cruce (mejor 3º).
-//    · 22 equipos  → 2 By en el primer cruce (dos mejores 3º).
+//    · 23 equipos  → 1 BYE en el primer cruce (mejor 3°).
+//    · 22 equipos  → 2 BYE en el primer cruce (dos mejores 3°).
 // =====================
 function generarEspecial8x3(t) {
   // Construimos el mapa de zonas desde los equipos
@@ -971,6 +973,7 @@ function generarEspecial8x3(t) {
     a.localeCompare(b, "es", { numeric: true, sensitivity: "base" })
   );
 
+  // Siempre trabajamos con 8 zonas (Z1..Z8)
   if (zoneNames.length !== 8) {
     alert(
       "El formato especial 8×3 requiere exactamente 8 zonas.\n" +
@@ -981,6 +984,7 @@ function generarEspecial8x3(t) {
     return [];
   }
 
+  // Conteo de equipos por zona
   let totalEnZonas = 0;
   let zonasCon3 = 0;
   let zonasCon2 = 0;
@@ -1038,140 +1042,19 @@ function generarEspecial8x3(t) {
       );
       return [];
     }
-  } } else if (totalEquipos === 22) {
-  // 6 terceros + 2 BYE (1° y 2° mejores 3° pasan directo)
-  const m17_1 = crearMatchClasif(
-    "P17_1",
-    "3° mejor 3°",
-    "6° mejor 3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  const m17_2 = crearMatchClasif(
-    "P17_2",
-    "4° mejor 3°",
-    "5° mejor 3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  const m17_3 = crearMatchClasif(
-    "P17_3",
-    "1° mejor 3°",
-    "BYE (1° mejor 3°)",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  m17_3.isByeMatch = true; // <<--- BYE
-  const m17_4 = crearMatchClasif(
-    "P17_4",
-    "2° mejor 3°",
-    "BYE (2° mejor 3°)",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  m17_4.isByeMatch = true; // <<--- BYE
-
-  const m17_5 = crearMatchDesdeGP_PP(
-    "P17_5",
-    m17_1.code,
-    "GP",
-    m17_2.code,
-    "GP",
-    2,
-    phase17_24,
-    zone17_24
-  );
-  const m17_6 = crearMatchDesdeGP_PP(
-    "P17_6",
-    m17_3.code,
-    "GP",
-    m17_4.code,
-    "GP",
-    2,
-    phase17_24,
-    zone17_24
-  );
-  const m17_7 = crearMatchDesdeGP_PP(
-    "P17_7",
-    m17_1.code,
-    "PP",
-    m17_2.code,
-    "PP",
-    2,
-    phase17_24,
-    zone17_24
-  );
-  const m17_8 = crearMatchDesdeGP_PP(
-    "P17_8",
-    m17_3.code,
-    "PP",
-    m17_4.code,
-    "PP",
-    2,
-    phase17_24,
-    zone17_24
-  );
-
-  const m17_9 = crearMatchDesdeGP_PP(
-    "P17_9",
-    m17_5.code,
-    "GP",
-    m17_6.code,
-    "GP",
-    3,
-    phase17_24,
-    zone17_24
-  );
-  const m17_10 = crearMatchDesdeGP_PP(
-    "P17_10",
-    m17_5.code,
-    "PP",
-    m17_6.code,
-    "PP",
-    3,
-    phase17_24,
-    zone17_24
-  );
-  const m17_11 = crearMatchDesdeGP_PP(
-    "P17_11",
-    m17_7.code,
-    "GP",
-    m17_8.code,
-    "GP",
-    3,
-    phase17_24,
-    zone17_24
-  );
-  const m17_12 = crearMatchDesdeGP_PP(
-    "P17_12",
-    m17_7.code,
-    "PP",
-    m17_8.code,
-    "PP",
-    3,
-    phase17_24,
-    zone17_24
-  );
-
-  allMatches.push(
-    m17_1,
-    m17_2,
-    m17_3, // BYE
-    m17_4, // BYE
-    m17_5,
-    m17_6,
-    m17_7,
-    m17_8,
-    m17_9,
-    m17_10,
-    m17_11,
-    m17_12
-  );
-} else {
+  } else if (totalEquipos === 22) {
+    if (zonasCon3 !== 6 || zonasCon2 !== 2) {
+      alert(
+        "Para 22 equipos el formato especial 8×3 requiere 6 zonas de 3 equipos y 2 zonas de 2 equipos.\n" +
+          "Detectadas: " +
+          zonasCon3 +
+          " zonas de 3 y " +
+          zonasCon2 +
+          " zonas de 2."
+      );
+      return [];
+    }
+  } else {
     alert(
       "Por ahora el formato especial 8×3 está preparado sólo para 22, 23 o 24 equipos.\n" +
         "Equipos detectados en zonas: " +
@@ -1471,13 +1354,13 @@ function generarEspecial8x3(t) {
   );
 
   // ---------------------
-  // FASE 5: PUESTOS 17–24 (3° de zonas / mejores 3ros)
+  // FASE 5: PUESTOS 17–24 (3° de zonas / mejores 3°)
   // ---------------------
   const phase17_24 = "Puestos 17-24";
   const zone17_24 = "Puestos 17-24";
 
   if (totalEquipos === 24) {
-    // Caso base: 8 terceros, sin Byes
+    // Caso base: 8 terceros, sin BYE
     const m17_1 = crearMatchClasif(
       "P17_1",
       "3° " + z1,
@@ -1608,142 +1491,272 @@ function generarEspecial8x3(t) {
       m17_12
     );
   } else if (totalEquipos === 23) {
-  // 7 terceros + 1 BYE (el 1° mejor 3° pasa directo)
-  // Nomenclatura homogénea: "n° mejor 3°"
-  const m17_1 = crearMatchClasif(
-    "P17_1",
-    "3° mejor 3°",
-    "6° mejor 3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  const m17_2 = crearMatchClasif(
-    "P17_2",
-    "4° mejor 3°",
-    "5° mejor 3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  const m17_3 = crearMatchClasif(
-    "P17_3",
-    "2° mejor 3°",
-    "7° mejor 3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  // Este es el partido fantasma (BYE). Lo marcamos como BYE.
-  const m17_4 = crearMatchClasif(
-    "P17_4",
-    "1° mejor 3°",
-    "BYE (1° mejor 3°)",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  m17_4.isByeMatch = true; // <<--- CLAVE
+    // 7 terceros + 1 BYE (el 1° mejor 3° pasa directo)
+    // Nomenclatura homogénea: "n° mejor 3°"
+    const m17_1 = crearMatchClasif(
+      "P17_1",
+      "3° mejor 3°",
+      "6° mejor 3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    const m17_2 = crearMatchClasif(
+      "P17_2",
+      "4° mejor 3°",
+      "5° mejor 3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    const m17_3 = crearMatchClasif(
+      "P17_3",
+      "2° mejor 3°",
+      "7° mejor 3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    // Partido fantasma con BYE
+    const m17_4 = crearMatchClasif(
+      "P17_4",
+      "1° mejor 3°",
+      "BYE (1° mejor 3°)",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    m17_4.isByeMatch = true;
 
-  // Ronda 2 (semis y reclasif) – mantenemos la misma lógica que ya venías usando
-  const m17_5 = crearMatchDesdeGP_PP(
-    "P17_5",
-    m17_1.code,
-    "GP",
-    m17_2.code,
-    "GP",
-    2,
-    phase17_24,
-    zone17_24
-  );
-  const m17_6 = crearMatchDesdeGP_PP(
-    "P17_6",
-    m17_3.code,
-    "GP",
-    m17_4.code,
-    "GP",
-    2,
-    phase17_24,
-    zone17_24
-  );
-  const m17_7 = crearMatchDesdeGP_PP(
-    "P17_7",
-    m17_1.code,
-    "PP",
-    m17_2.code,
-    "PP",
-    2,
-    phase17_24,
-    zone17_24
-  );
-  const m17_8 = crearMatchDesdeGP_PP(
-    "P17_8",
-    m17_3.code,
-    "PP",
-    m17_4.code,
-    "PP",
-    2,
-    phase17_24,
-    zone17_24
-  );
+    const m17_5 = crearMatchDesdeGP_PP(
+      "P17_5",
+      m17_1.code,
+      "GP",
+      m17_2.code,
+      "GP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+    const m17_6 = crearMatchDesdeGP_PP(
+      "P17_6",
+      m17_3.code,
+      "GP",
+      m17_4.code,
+      "GP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+    const m17_7 = crearMatchDesdeGP_PP(
+      "P17_7",
+      m17_1.code,
+      "PP",
+      m17_2.code,
+      "PP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+    const m17_8 = crearMatchDesdeGP_PP(
+      "P17_8",
+      m17_3.code,
+      "PP",
+      m17_4.code,
+      "PP",
+      2,
+      phase17_24,
+      zone17_24
+    );
 
-  // Ronda 3 (definiciones 17–24)
-  const m17_9 = crearMatchDesdeGP_PP(
-    "P17_9",
-    m17_5.code,
-    "GP",
-    m17_6.code,
-    "GP",
-    3,
-    phase17_24,
-    zone17_24
-  );
-  const m17_10 = crearMatchDesdeGP_PP(
-    "P17_10",
-    m17_5.code,
-    "PP",
-    m17_6.code,
-    "PP",
-    3,
-    phase17_24,
-    zone17_24
-  );
-  const m17_11 = crearMatchDesdeGP_PP(
-    "P17_11",
-    m17_7.code,
-    "GP",
-    m17_8.code,
-    "GP",
-    3,
-    phase17_24,
-    zone17_24
-  );
-  const m17_12 = crearMatchDesdeGP_PP(
-    "P17_12",
-    m17_7.code,
-    "PP",
-    m17_8.code,
-    "PP",
-    3,
-    phase17_24,
-    zone17_24
-  );
+    const m17_9 = crearMatchDesdeGP_PP(
+      "P17_9",
+      m17_5.code,
+      "GP",
+      m17_6.code,
+      "GP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+    const m17_10 = crearMatchDesdeGP_PP(
+      "P17_10",
+      m17_5.code,
+      "PP",
+      m17_6.code,
+      "PP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+    const m17_11 = crearMatchDesdeGP_PP(
+      "P17_11",
+      m17_7.code,
+      "GP",
+      m17_8.code,
+      "GP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+    const m17_12 = crearMatchDesdeGP_PP(
+      "P17_12",
+      m17_7.code,
+      "PP",
+      m17_8.code,
+      "PP",
+      3,
+      phase17_24,
+      zone17_24
+    );
 
-  allMatches.push(
-    m17_1,
-    m17_2,
-    m17_3,
-    m17_4, // BYE (no se programará ni aparecerá como partido)
-    m17_5,
-    m17_6,
-    m17_7,
-    m17_8,
-    m17_9,
-    m17_10,
-    m17_11,
-    m17_12
-  );
+    allMatches.push(
+      m17_1,
+      m17_2,
+      m17_3,
+      m17_4,
+      m17_5,
+      m17_6,
+      m17_7,
+      m17_8,
+      m17_9,
+      m17_10,
+      m17_11,
+      m17_12
+    );
+  } else if (totalEquipos === 22) {
+    // 6 terceros + 2 BYE (1° y 2° mejores 3° pasan directo)
+    const m17_1 = crearMatchClasif(
+      "P17_1",
+      "3° mejor 3°",
+      "6° mejor 3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    const m17_2 = crearMatchClasif(
+      "P17_2",
+      "4° mejor 3°",
+      "5° mejor 3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    const m17_3 = crearMatchClasif(
+      "P17_3",
+      "1° mejor 3°",
+      "BYE (1° mejor 3°)",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    m17_3.isByeMatch = true;
+    const m17_4 = crearMatchClasif(
+      "P17_4",
+      "2° mejor 3°",
+      "BYE (2° mejor 3°)",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    m17_4.isByeMatch = true;
 
+    const m17_5 = crearMatchDesdeGP_PP(
+      "P17_5",
+      m17_1.code,
+      "GP",
+      m17_2.code,
+      "GP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+    const m17_6 = crearMatchDesdeGP_PP(
+      "P17_6",
+      m17_3.code,
+      "GP",
+      m17_4.code,
+      "GP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+    const m17_7 = crearMatchDesdeGP_PP(
+      "P17_7",
+      m17_1.code,
+      "PP",
+      m17_2.code,
+      "PP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+    const m17_8 = crearMatchDesdeGP_PP(
+      "P17_8",
+      m17_3.code,
+      "PP",
+      m17_4.code,
+      "PP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+
+    const m17_9 = crearMatchDesdeGP_PP(
+      "P17_9",
+      m17_5.code,
+      "GP",
+      m17_6.code,
+      "GP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+    const m17_10 = crearMatchDesdeGP_PP(
+      "P17_10",
+      m17_5.code,
+      "PP",
+      m17_6.code,
+      "PP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+    const m17_11 = crearMatchDesdeGP_PP(
+      "P17_11",
+      m17_7.code,
+      "GP",
+      m17_8.code,
+      "GP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+    const m17_12 = crearMatchDesdeGP_PP(
+      "P17_12",
+      m17_7.code,
+      "PP",
+      m17_8.code,
+      "PP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+
+    allMatches.push(
+      m17_1,
+      m17_2,
+      m17_3,
+      m17_4,
+      m17_5,
+      m17_6,
+      m17_7,
+      m17_8,
+      m17_9,
+      m17_10,
+      m17_11,
+      m17_12
+    );
   }
 
   return allMatches;
