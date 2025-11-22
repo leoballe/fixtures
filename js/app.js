@@ -1116,8 +1116,9 @@ function generarEspecial8x3(t) {
   const z7 = zoneNames[6];
   const z8 = zoneNames[7];
 
-  const seedsA1 = ["1° " + z1, "1° " + z3, "1° " + z5, "1° " + z7];
-  const seedsA2 = ["1° " + z2, "1° " + z4, "1° " + z6, "1° " + z8];
+  // Seeds de los mejores 1°: 1°1° .. 8°1°
+  const seedsA1 = ["1°1°", "4°1°", "5°1°", "8°1°"];
+  const seedsA2 = ["2°1°", "3°1°", "6°1°", "7°1°"];
 
   const zonaA1 = generarLigaSeeds(seedsA1, {
     idaVuelta: idaVueltaGlobal,
@@ -1220,35 +1221,35 @@ function generarEspecial8x3(t) {
   const phase9_16 = "Puestos 9-16";
   const zone9_16 = "Puestos 9-16";
 
-  // Ronda 1 (2° de zonas)
+  // Ronda 1 (mejores 2°)
   const m9_1 = crearMatchClasif(
     "P9_1",
-    "2° " + z1,
-    "2° " + z3,
+    "1°2°",
+    "3°2°",
     1,
     phase9_16,
     zone9_16
   );
   const m9_2 = crearMatchClasif(
     "P9_2",
-    "2° " + z5,
-    "2° " + z7,
+    "5°2°",
+    "7°2°",
     1,
     phase9_16,
     zone9_16
   );
   const m9_3 = crearMatchClasif(
     "P9_3",
-    "2° " + z2,
-    "2° " + z4,
+    "2°2°",
+    "4°2°",
     1,
     phase9_16,
     zone9_16
   );
   const m9_4 = crearMatchClasif(
     "P9_4",
-    "2° " + z6,
-    "2° " + z8,
+    "6°2°",
+    "8°2°",
     1,
     phase9_16,
     zone9_16
@@ -1359,36 +1360,36 @@ function generarEspecial8x3(t) {
   const phase17_24 = "Puestos 17-24";
   const zone17_24 = "Puestos 17-24";
 
-  if (totalEquipos === 24) {
-    // Caso base: 8 terceros, sin BYE
+ if (totalEquipos === 24) {
+    // Caso base: 8 terceros, sin Byes (mejores 3°)
     const m17_1 = crearMatchClasif(
       "P17_1",
-      "3° " + z1,
-      "3° " + z3,
+      "1°3°",
+      "3°3°",
       1,
       phase17_24,
       zone17_24
     );
     const m17_2 = crearMatchClasif(
       "P17_2",
-      "3° " + z5,
-      "3° " + z7,
+      "5°3°",
+      "7°3°",
       1,
       phase17_24,
       zone17_24
     );
     const m17_3 = crearMatchClasif(
       "P17_3",
-      "3° " + z2,
-      "3° " + z4,
+      "2°3°",
+      "4°3°",
       1,
       phase17_24,
       zone17_24
     );
     const m17_4 = crearMatchClasif(
       "P17_4",
-      "3° " + z6,
-      "3° " + z8,
+      "6°3°",
+      "8°3°",
       1,
       phase17_24,
       zone17_24
@@ -1495,24 +1496,24 @@ function generarEspecial8x3(t) {
     // Nomenclatura homogénea: "n° mejor 3°"
     const m17_1 = crearMatchClasif(
       "P17_1",
-      "3° mejor 3°",
-      "6° mejor 3°",
+      "3°3°",
+      "6°3°",
       1,
       phase17_24,
       zone17_24
     );
     const m17_2 = crearMatchClasif(
       "P17_2",
-      "4° mejor 3°",
-      "5° mejor 3°",
+      "4°3°",
+      "5°3°",
       1,
       phase17_24,
       zone17_24
     );
     const m17_3 = crearMatchClasif(
       "P17_3",
-      "2° mejor 3°",
-      "7° mejor 3°",
+      "2°3°",
+      "7°3°",
       1,
       phase17_24,
       zone17_24
@@ -1520,8 +1521,8 @@ function generarEspecial8x3(t) {
     // Partido fantasma con BYE
     const m17_4 = crearMatchClasif(
       "P17_4",
-      "1° mejor 3°",
-      "BYE (1° mejor 3°)",
+      "1°3°",
+      "BYE (1°3°)",
       1,
       phase17_24,
       zone17_24
@@ -1628,24 +1629,24 @@ function generarEspecial8x3(t) {
     // 6 terceros + 2 BYE (1° y 2° mejores 3° pasan directo)
     const m17_1 = crearMatchClasif(
       "P17_1",
-      "3° mejor 3°",
-      "6° mejor 3°",
+      "3°3°",
+      "6°3°",
       1,
       phase17_24,
       zone17_24
     );
     const m17_2 = crearMatchClasif(
       "P17_2",
-      "4° mejor 3°",
-      "5° mejor 3°",
+      "4°3°",
+      "5°3°",
       1,
       phase17_24,
       zone17_24
     );
     const m17_3 = crearMatchClasif(
       "P17_3",
-      "1° mejor 3°",
-      "BYE (1° mejor 3°)",
+      "1°3°",
+      "BYE (1°3°)",
       1,
       phase17_24,
       zone17_24
@@ -1653,8 +1654,8 @@ function generarEspecial8x3(t) {
     m17_3.isByeMatch = true;
     const m17_4 = crearMatchClasif(
       "P17_4",
-      "2° mejor 3°",
-      "BYE (2° mejor 3°)",
+      "2°3°",
+      "BYE (2°3°)",
       1,
       phase17_24,
       zone17_24
