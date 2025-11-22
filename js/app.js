@@ -1038,19 +1038,140 @@ function generarEspecial8x3(t) {
       );
       return [];
     }
-  } else if (totalEquipos === 22) {
-    if (zonasCon3 !== 6 || zonasCon2 !== 2) {
-      alert(
-        "Para 22 equipos el formato especial 8×3 requiere 6 zonas de 3 equipos y 2 zonas de 2 equipos.\n" +
-          "Detectadas: " +
-          zonasCon3 +
-          " zonas de 3 y " +
-          zonasCon2 +
-          " zonas de 2."
-      );
-      return [];
-    }
-  } else {
+  } } else if (totalEquipos === 22) {
+  // 6 terceros + 2 BYE (1° y 2° mejores 3° pasan directo)
+  const m17_1 = crearMatchClasif(
+    "P17_1",
+    "3° mejor 3°",
+    "6° mejor 3°",
+    1,
+    phase17_24,
+    zone17_24
+  );
+  const m17_2 = crearMatchClasif(
+    "P17_2",
+    "4° mejor 3°",
+    "5° mejor 3°",
+    1,
+    phase17_24,
+    zone17_24
+  );
+  const m17_3 = crearMatchClasif(
+    "P17_3",
+    "1° mejor 3°",
+    "BYE (1° mejor 3°)",
+    1,
+    phase17_24,
+    zone17_24
+  );
+  m17_3.isByeMatch = true; // <<--- BYE
+  const m17_4 = crearMatchClasif(
+    "P17_4",
+    "2° mejor 3°",
+    "BYE (2° mejor 3°)",
+    1,
+    phase17_24,
+    zone17_24
+  );
+  m17_4.isByeMatch = true; // <<--- BYE
+
+  const m17_5 = crearMatchDesdeGP_PP(
+    "P17_5",
+    m17_1.code,
+    "GP",
+    m17_2.code,
+    "GP",
+    2,
+    phase17_24,
+    zone17_24
+  );
+  const m17_6 = crearMatchDesdeGP_PP(
+    "P17_6",
+    m17_3.code,
+    "GP",
+    m17_4.code,
+    "GP",
+    2,
+    phase17_24,
+    zone17_24
+  );
+  const m17_7 = crearMatchDesdeGP_PP(
+    "P17_7",
+    m17_1.code,
+    "PP",
+    m17_2.code,
+    "PP",
+    2,
+    phase17_24,
+    zone17_24
+  );
+  const m17_8 = crearMatchDesdeGP_PP(
+    "P17_8",
+    m17_3.code,
+    "PP",
+    m17_4.code,
+    "PP",
+    2,
+    phase17_24,
+    zone17_24
+  );
+
+  const m17_9 = crearMatchDesdeGP_PP(
+    "P17_9",
+    m17_5.code,
+    "GP",
+    m17_6.code,
+    "GP",
+    3,
+    phase17_24,
+    zone17_24
+  );
+  const m17_10 = crearMatchDesdeGP_PP(
+    "P17_10",
+    m17_5.code,
+    "PP",
+    m17_6.code,
+    "PP",
+    3,
+    phase17_24,
+    zone17_24
+  );
+  const m17_11 = crearMatchDesdeGP_PP(
+    "P17_11",
+    m17_7.code,
+    "GP",
+    m17_8.code,
+    "GP",
+    3,
+    phase17_24,
+    zone17_24
+  );
+  const m17_12 = crearMatchDesdeGP_PP(
+    "P17_12",
+    m17_7.code,
+    "PP",
+    m17_8.code,
+    "PP",
+    3,
+    phase17_24,
+    zone17_24
+  );
+
+  allMatches.push(
+    m17_1,
+    m17_2,
+    m17_3, // BYE
+    m17_4, // BYE
+    m17_5,
+    m17_6,
+    m17_7,
+    m17_8,
+    m17_9,
+    m17_10,
+    m17_11,
+    m17_12
+  );
+} else {
     alert(
       "Por ahora el formato especial 8×3 está preparado sólo para 22, 23 o 24 equipos.\n" +
         "Equipos detectados en zonas: " +
@@ -1487,267 +1608,142 @@ function generarEspecial8x3(t) {
       m17_12
     );
   } else if (totalEquipos === 23) {
-    // 7 terceros reales + 1 By → el mejor 3º no juega el primer cruce
-    const m17_1 = crearMatchClasif(
-      "P17_1",
-      "3º 3º",
-      "6º 3º",
-      1,
-      phase17_24,
-      zone17_24
-    );
-    const m17_2 = crearMatchClasif(
-      "P17_2",
-      "4º 3º",
-      "5º 3º",
-      1,
-      phase17_24,
-      zone17_24
-    );
-    const m17_3 = crearMatchClasif(
-      "P17_3",
-      "2º 3º",
-      "7º 3º",
-      1,
-      phase17_24,
-      zone17_24
-    );
-    const m17_4 = crearMatchClasif(
-      "P17_4",
-      "1º 3º",
-      "BYE (mejor 3º)",
-      1,
-      phase17_24,
-      zone17_24
-    );
+  // 7 terceros + 1 BYE (el 1° mejor 3° pasa directo)
+  // Nomenclatura homogénea: "n° mejor 3°"
+  const m17_1 = crearMatchClasif(
+    "P17_1",
+    "3° mejor 3°",
+    "6° mejor 3°",
+    1,
+    phase17_24,
+    zone17_24
+  );
+  const m17_2 = crearMatchClasif(
+    "P17_2",
+    "4° mejor 3°",
+    "5° mejor 3°",
+    1,
+    phase17_24,
+    zone17_24
+  );
+  const m17_3 = crearMatchClasif(
+    "P17_3",
+    "2° mejor 3°",
+    "7° mejor 3°",
+    1,
+    phase17_24,
+    zone17_24
+  );
+  // Este es el partido fantasma (BYE). Lo marcamos como BYE.
+  const m17_4 = crearMatchClasif(
+    "P17_4",
+    "1° mejor 3°",
+    "BYE (1° mejor 3°)",
+    1,
+    phase17_24,
+    zone17_24
+  );
+  m17_4.isByeMatch = true; // <<--- CLAVE
 
-    const m17_5 = crearMatchDesdeGP_PP(
-      "P17_5",
-      m17_1.code,
-      "GP",
-      m17_2.code,
-      "GP",
-      2,
-      phase17_24,
-      zone17_24
-    );
-    const m17_6 = crearMatchDesdeGP_PP(
-      "P17_6",
-      m17_3.code,
-      "GP",
-      m17_4.code,
-      "GP",
-      2,
-      phase17_24,
-      zone17_24
-    );
-    const m17_7 = crearMatchDesdeGP_PP(
-      "P17_7",
-      m17_1.code,
-      "PP",
-      m17_2.code,
-      "PP",
-      2,
-      phase17_24,
-      zone17_24
-    );
-    const m17_8 = crearMatchDesdeGP_PP(
-      "P17_8",
-      m17_3.code,
-      "PP",
-      m17_4.code,
-      "PP",
-      2,
-      phase17_24,
-      zone17_24
-    );
+  // Ronda 2 (semis y reclasif) – mantenemos la misma lógica que ya venías usando
+  const m17_5 = crearMatchDesdeGP_PP(
+    "P17_5",
+    m17_1.code,
+    "GP",
+    m17_2.code,
+    "GP",
+    2,
+    phase17_24,
+    zone17_24
+  );
+  const m17_6 = crearMatchDesdeGP_PP(
+    "P17_6",
+    m17_3.code,
+    "GP",
+    m17_4.code,
+    "GP",
+    2,
+    phase17_24,
+    zone17_24
+  );
+  const m17_7 = crearMatchDesdeGP_PP(
+    "P17_7",
+    m17_1.code,
+    "PP",
+    m17_2.code,
+    "PP",
+    2,
+    phase17_24,
+    zone17_24
+  );
+  const m17_8 = crearMatchDesdeGP_PP(
+    "P17_8",
+    m17_3.code,
+    "PP",
+    m17_4.code,
+    "PP",
+    2,
+    phase17_24,
+    zone17_24
+  );
 
-    const m17_9 = crearMatchDesdeGP_PP(
-      "P17_9",
-      m17_5.code,
-      "GP",
-      m17_6.code,
-      "GP",
-      3,
-      phase17_24,
-      zone17_24
-    );
-    const m17_10 = crearMatchDesdeGP_PP(
-      "P17_10",
-      m17_5.code,
-      "PP",
-      m17_6.code,
-      "PP",
-      3,
-      phase17_24,
-      zone17_24
-    );
-    const m17_11 = crearMatchDesdeGP_PP(
-      "P17_11",
-      m17_7.code,
-      "GP",
-      m17_8.code,
-      "GP",
-      3,
-      phase17_24,
-      zone17_24
-    );
-    const m17_12 = crearMatchDesdeGP_PP(
-      "P17_12",
-      m17_7.code,
-      "PP",
-      m17_8.code,
-      "PP",
-      3,
-      phase17_24,
-      zone17_24
-    );
+  // Ronda 3 (definiciones 17–24)
+  const m17_9 = crearMatchDesdeGP_PP(
+    "P17_9",
+    m17_5.code,
+    "GP",
+    m17_6.code,
+    "GP",
+    3,
+    phase17_24,
+    zone17_24
+  );
+  const m17_10 = crearMatchDesdeGP_PP(
+    "P17_10",
+    m17_5.code,
+    "PP",
+    m17_6.code,
+    "PP",
+    3,
+    phase17_24,
+    zone17_24
+  );
+  const m17_11 = crearMatchDesdeGP_PP(
+    "P17_11",
+    m17_7.code,
+    "GP",
+    m17_8.code,
+    "GP",
+    3,
+    phase17_24,
+    zone17_24
+  );
+  const m17_12 = crearMatchDesdeGP_PP(
+    "P17_12",
+    m17_7.code,
+    "PP",
+    m17_8.code,
+    "PP",
+    3,
+    phase17_24,
+    zone17_24
+  );
 
-    allMatches.push(
-      m17_1,
-      m17_2,
-      m17_3,
-      m17_4,
-      m17_5,
-      m17_6,
-      m17_7,
-      m17_8,
-      m17_9,
-      m17_10,
-      m17_11,
-      m17_12
-    );
-  } else if (totalEquipos === 22) {
-    // 6 terceros reales + 2 By → los dos mejores 3º no juegan el primer cruce
-    const m17_1 = crearMatchClasif(
-      "P17_1",
-      "3º 3º",
-      "6º 3º",
-      1,
-      phase17_24,
-      zone17_24
-    );
-    const m17_2 = crearMatchClasif(
-      "P17_2",
-      "4º 3º",
-      "5º 3º",
-      1,
-      phase17_24,
-      zone17_24
-    );
-    const m17_3 = crearMatchClasif(
-      "P17_3",
-      "1º 3º",
-      "BYE (1º 3º)",
-      1,
-      phase17_24,
-      zone17_24
-    );
-    const m17_4 = crearMatchClasif(
-      "P17_4",
-      "2º 3º",
-      "BYE (2º 3º)",
-      1,
-      phase17_24,
-      zone17_24
-    );
+  allMatches.push(
+    m17_1,
+    m17_2,
+    m17_3,
+    m17_4, // BYE (no se programará ni aparecerá como partido)
+    m17_5,
+    m17_6,
+    m17_7,
+    m17_8,
+    m17_9,
+    m17_10,
+    m17_11,
+    m17_12
+  );
 
-    const m17_5 = crearMatchDesdeGP_PP(
-      "P17_5",
-      m17_1.code,
-      "GP",
-      m17_2.code,
-      "GP",
-      2,
-      phase17_24,
-      zone17_24
-    );
-    const m17_6 = crearMatchDesdeGP_PP(
-      "P17_6",
-      m17_3.code,
-      "GP",
-      m17_4.code,
-      "GP",
-      2,
-      phase17_24,
-      zone17_24
-    );
-    const m17_7 = crearMatchDesdeGP_PP(
-      "P17_7",
-      m17_1.code,
-      "PP",
-      m17_2.code,
-      "PP",
-      2,
-      phase17_24,
-      zone17_24
-    );
-    const m17_8 = crearMatchDesdeGP_PP(
-      "P17_8",
-      m17_3.code,
-      "PP",
-      m17_4.code,
-      "PP",
-      2,
-      phase17_24,
-      zone17_24
-    );
-
-    const m17_9 = crearMatchDesdeGP_PP(
-      "P17_9",
-      m17_5.code,
-      "GP",
-      m17_6.code,
-      "GP",
-      3,
-      phase17_24,
-      zone17_24
-    );
-    const m17_10 = crearMatchDesdeGP_PP(
-      "P17_10",
-      m17_5.code,
-      "PP",
-      m17_6.code,
-      "PP",
-      3,
-      phase17_24,
-      zone17_24
-    );
-    const m17_11 = crearMatchDesdeGP_PP(
-      "P17_11",
-      m17_7.code,
-      "GP",
-      m17_8.code,
-      "GP",
-      3,
-      phase17_24,
-      zone17_24
-    );
-    const m17_12 = crearMatchDesdeGP_PP(
-      "P17_12",
-      m17_7.code,
-      "PP",
-      m17_8.code,
-      "PP",
-      3,
-      phase17_24,
-      zone17_24
-    );
-
-    allMatches.push(
-      m17_1,
-      m17_2,
-      m17_3,
-      m17_4,
-      m17_5,
-      m17_6,
-      m17_7,
-      m17_8,
-      m17_9,
-      m17_10,
-      m17_11,
-      m17_12
-    );
   }
 
   return allMatches;
@@ -1906,6 +1902,9 @@ function asignarHorarios(matches, options = {}) {
   const maxMatchesPerDay = matches.length; // sin límite real
 
   function puedeJugarEnSlot(m, slot, restOverride) {
+      if (m && m.isByeMatch) {
+    return false;
+  }
     const rest = typeof restOverride === "number" ? restOverride : restGlobal;
     const home = m.homeTeamId;
     const away = m.awayTeamId;
@@ -3105,55 +3104,62 @@ function renderFixtureResult() {
     "</tr>";
   table.appendChild(thead);
 
-  const tbody = document.createElement("tbody");
+const tbody = document.createElement("tbody");
+let rowIndex = 0;
 
-  t.matches.forEach((m, idx) => {
-    const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
-    const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
+t.matches.forEach((m) => {
+  if (m.isByeMatch) return; // BYE fuera de la tabla
 
-    const homeLabel = home ? home.shortName : m.homeSeed || "?";
-    const awayLabel = away ? away.shortName : m.awaySeed || "?";
+  const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
+  const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
 
-    const field =
-      m.fieldId && fieldById[m.fieldId] ? fieldById[m.fieldId].name : m.fieldId;
+  const homeLabel = home ? home.shortName : m.homeSeed || "?";
+  const awayLabel = away ? away.shortName : m.awaySeed || "?";
 
-    const phaseRoundLabel =
-      (m.phase || "") +
-      " (R" +
-      (m.round || "-") +
-      (m.code ? " · " + m.code : "") +
-      ")";
+  const field =
+    m.fieldId && fieldById[m.fieldId]
+      ? fieldById[m.fieldId].name
+      : m.fieldId || "";
 
-    const tr = document.createElement("tr");
-    tr.innerHTML =
-      "<td>" +
-      (idx + 1) +
-      "</td>" +
-      "<td>" +
-      (m.code || "-") +
-      "</td>" +
-      "<td>" +
-      (m.zone || "-") +
-      "</td>" +
-      "<td>" +
-      (m.date || "-") +
-      "</td>" +
-      "<td>" +
-      (m.time || "-") +
-      "</td>" +
-      "<td>" +
-      (field || "-") +
-      "</td>" +
-      "<td>" +
-      homeLabel +
-      " vs " +
-      awayLabel +
-      "</td>" +
-      "<td>" +
-      phaseRoundLabel +
-      "</td>";
-    tbody.appendChild(tr);
-  });
+  const phaseRoundLabel =
+    (m.phase || "") +
+    " (R" +
+    (m.round || "-") +
+    (m.code ? " · " + m.code : "") +
+    ")";
+
+  const tr = document.createElement("tr");
+  rowIndex++;
+
+  tr.innerHTML =
+    "<td>" +
+    rowIndex +
+    "</td>" +
+    "<td>" +
+    (m.zone || "") +
+    "</td>" +
+    "<td>" +
+    (m.date || "") +
+    "</td>" +
+    "<td>" +
+    (m.time || "") +
+    "</td>" +
+    "<td>" +
+    field +
+    "</td>" +
+    "<td>" +
+    homeLabel +
+    "</td>" +
+    "<td>" +
+    awayLabel +
+    "</td>" +
+    "<td>" +
+    phaseRoundLabel +
+    "</td>";
+
+  tbody.appendChild(tr);
+});
+
 
   table.appendChild(tbody);
   container.appendChild(table);
@@ -3211,24 +3217,31 @@ function renderExportView(mode) {
 
   if (mode === "zone") {
     t.matches.forEach((m) => {
+          if (m.isByeMatch) return; // <<--- NUEVO
       const key = m.zone || "Sin zona";
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(m);
     });
   } else if (mode === "day") {
     t.matches.forEach((m) => {
+          if (m.isByeMatch) return; // <<--- NUEVO
+
       const key = m.date || "Sin fecha";
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(m);
     });
   } else if (mode === "field") {
     t.matches.forEach((m) => {
+          if (m.isByeMatch) return; // <<--- NUEVO
+
       const key = m.fieldId || "Sin cancha";
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(m);
     });
   } else if (mode === "team") {
     t.matches.forEach((m) => {
+          if (m.isByeMatch) return; // <<--- NUEVO
+
       if (m.homeTeamId) {
         if (!grouped[m.homeTeamId]) grouped[m.homeTeamId] = [];
         grouped[m.homeTeamId].push(Object.assign({ role: "Local" }, m));
@@ -3446,31 +3459,40 @@ function exportMatchesAsCsv() {
     ].join(";")
   );
 
-  t.matches.forEach((m, idx) => {
-    const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
-    const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
-    const homeLabel = home ? home.shortName : m.homeSeed || "";
-    const awayLabel = away ? away.shortName : m.awaySeed || "";
-    const field =
-      m.fieldId && fieldById[m.fieldId]
-        ? fieldById[m.fieldId].name
-        : m.fieldId || "";
+let rowIndex = 0;
 
-    rows.push(
-      [
-        String(idx + 1),
-        m.zone || "",
-        m.date || "",
-        m.time || "",
-        field,
-        homeLabel,
-        awayLabel,
-        m.phase || "",
-        String(m.round || ""),
-        m.code || "",
-      ].join(";")
-    );
-  });
+t.matches.forEach((m) => {
+  if (m.isByeMatch) return; // <<--- NO exportar BYE
+
+  const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
+  const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
+
+  const homeLabel = home ? home.shortName : m.homeSeed || "";
+  const awayLabel = away ? away.shortName : m.awaySeed || "";
+
+  const field =
+    m.fieldId && fieldById[m.fieldId]
+      ? fieldById[m.fieldId].name
+      : m.fieldId || "";
+
+  rowIndex++;
+
+  rows.push(
+    [
+      String(rowIndex),
+      m.zone || "",
+      m.date || "",
+      m.time || "",
+      field,
+      homeLabel,
+      awayLabel,
+      m.phase || "",
+      String(m.round || ""),
+      m.code || "",
+    ].join(";")
+  );
+});
+
 
   const csvContent = rows.join("\r\n");
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
