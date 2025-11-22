@@ -1635,41 +1635,50 @@ if (totalEquipos === 24) {
   );
 
   } else if (totalEquipos === 22) {
-    // 6 terceros + 2 BYE (1° y 2° mejores 3° pasan directo)
-    const m17_1 = crearMatchClasif(
-      "P17_1",
-      "3°3°",
-      "6°3°",
-      1,
-      phase17_24,
-      zone17_24
-    );
-    const m17_2 = crearMatchClasif(
-      "P17_2",
-      "4°3°",
-      "5°3°",
-      1,
-      phase17_24,
-      zone17_24
-    );
-    const m17_3 = crearMatchClasif(
-      "P17_3",
-      "1°3°",
-      "BYE (1°3°)",
-      1,
-      phase17_24,
-      zone17_24
-    );
-    m17_3.isByeMatch = true;
-    const m17_4 = crearMatchClasif(
-      "P17_4",
-      "2°3°",
-      "BYE (2°3°)",
-      1,
-      phase17_24,
-      zone17_24
-    );
-    m17_4.isByeMatch = true;
+  // 6 terceros + 2 BYE (1°3° y 2°3° pasan directo)
+  // Patrón:
+  // 1°3° vs BYE
+  // 4°3° vs 5°3°
+  // 3°3° vs 6°3°
+  // 2°3° vs BYE
+
+  const m17_1 = crearMatchClasif(
+    "P17_1",
+    "1°3°",
+    "BYE (1°3°)",
+    1,
+    phase17_24,
+    zone17_24
+  );
+  m17_1.isByeMatch = true; // BYE: no se programa
+
+  const m17_2 = crearMatchClasif(
+    "P17_2",
+    "4°3°",
+    "5°3°",
+    1,
+    phase17_24,
+    zone17_24
+  );
+
+  const m17_3 = crearMatchClasif(
+    "P17_3",
+    "3°3°",
+    "6°3°",
+    1,
+    phase17_24,
+    zone17_24
+  );
+
+  const m17_4 = crearMatchClasif(
+    "P17_4",
+    "2°3°",
+    "BYE (2°3°)",
+    1,
+    phase17_24,
+    zone17_24
+  );
+  m17_4.isByeMatch = true; // segundo BYE
 
     const m17_5 = crearMatchDesdeGP_PP(
       "P17_5",
