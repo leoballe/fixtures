@@ -3126,7 +3126,6 @@ function renderFixtureResult() {
   thead.innerHTML =
     "<tr>" +
     "<th>#</th>" +
-    "<th>ID</th>" +
     "<th>Zona</th>" +
     "<th>Fecha</th>" +
     "<th>Hora</th>" +
@@ -3137,7 +3136,7 @@ function renderFixtureResult() {
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
-  let rowIndex = 0; // numerador sólo para partidos reales
+  let rowIndex = 0; // numeración global, sólo partidos reales
 
   t.matches.forEach((m) => {
     // No mostramos ni numeramos partidos BYE
@@ -3152,7 +3151,7 @@ function renderFixtureResult() {
     const field =
       m.fieldId && fieldById[m.fieldId]
         ? fieldById[m.fieldId].name
-        : m.fieldId || "";
+        : m.fieldId || "-";
 
     const phaseRoundLabel =
       (m.phase || "") +
@@ -3169,9 +3168,6 @@ function renderFixtureResult() {
       rowIndex +
       "</td>" +
       "<td>" +
-      (m.code || "-") +
-      "</td>" +
-      "<td>" +
       (m.zone || "-") +
       "</td>" +
       "<td>" +
@@ -3181,7 +3177,7 @@ function renderFixtureResult() {
       (m.time || "-") +
       "</td>" +
       "<td>" +
-      (field || "-") +
+      field +
       "</td>" +
       "<td>" +
       homeLabel +
@@ -3198,6 +3194,7 @@ function renderFixtureResult() {
   table.appendChild(tbody);
   container.appendChild(table);
 }
+
 
 
 // =====================
@@ -3247,36 +3244,43 @@ function renderExportView(mode) {
     fieldById[f.id] = f;
   });
 
+  // Numeración global de partidos (sin BYE) para usar como ID consistente
+  const matchNumberById = {};
+  let globalIndex = 0;
+  t.matches.forEach((m) => {
+    if (m.isByeMatch) return;
+    globalIndex++;
+    matchNumberById[m.id] = globalIndex;
+  });
+
   container.innerHTML = "";
+
   const grouped = {};
 
   if (mode === "zone") {
     t.matches.forEach((m) => {
-          if (m.isByeMatch) return; // <<--- NUEVO
+      if (m.isByeMatch) return;
       const key = m.zone || "Sin zona";
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(m);
     });
   } else if (mode === "day") {
     t.matches.forEach((m) => {
-          if (m.isByeMatch) return; // <<--- NUEVO
-
+      if (m.isByeMatch) return;
       const key = m.date || "Sin fecha";
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(m);
     });
   } else if (mode === "field") {
     t.matches.forEach((m) => {
-          if (m.isByeMatch) return; // <<--- NUEVO
-
+      if (m.isByeMatch) return;
       const key = m.fieldId || "Sin cancha";
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(m);
     });
   } else if (mode === "team") {
     t.matches.forEach((m) => {
-          if (m.isByeMatch) return; // <<--- NUEVO
-
+      if (m.isByeMatch) return;
       if (m.homeTeamId) {
         if (!grouped[m.homeTeamId]) grouped[m.homeTeamId] = [];
         grouped[m.homeTeamId].push(Object.assign({ role: "Local" }, m));
@@ -3370,13 +3374,13 @@ function renderExportView(mode) {
         if (fa < fb) return -1;
         if (fa > fb) return 1;
 
-        // Desempate final por ID de partido
-        const ida = typeof a.id === "number" ? a.id : 0;
-        const idb = typeof b.id === "number" ? b.id : 0;
+        // Desempate final por número de partido global
+        const ida = matchNumberById[a.id] || 0;
+        const idb = matchNumberById[b.id] || 0;
         return ida - idb;
       });
     }
-    
+
     rows.forEach((m) => {
       const home = m.homeTeamId ? teamById[m.homeTeamId] : null;
       const away = m.awayTeamId ? teamById[m.awayTeamId] : null;
@@ -3395,6 +3399,8 @@ function renderExportView(mode) {
         ")";
 
       const tr = document.createElement("tr");
+      const matchNumber =
+        matchNumberById[m.id] != null ? matchNumberById[m.id] : "";
 
       if (mode === "team") {
         const isHome = m.role === "Local";
@@ -3423,7 +3429,7 @@ function renderExportView(mode) {
           phaseRoundLabel +
           "</td>" +
           "<td>" +
-          (m.code || "-") +
+          matchNumber +
           "</td>";
       } else {
         tr.innerHTML =
@@ -3448,7 +3454,7 @@ function renderExportView(mode) {
           phaseRoundLabel +
           "</td>" +
           "<td>" +
-          (m.code || "-") +
+          matchNumber +
           "</td>";
       }
 
@@ -3460,6 +3466,7 @@ function renderExportView(mode) {
     container.appendChild(block);
   });
 }
+
 
 function exportMatchesAsCsv() {
   const t = appState.currentTournament;
