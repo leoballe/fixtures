@@ -1117,8 +1117,8 @@ function generarEspecial8x3(t) {
   const z8 = zoneNames[7];
 
   // Seeds de los mejores 1°: 1°1° .. 8°1°
-  const seedsA1 = ["1°1°", "3°1°", "5°1°", "7°1°"];
-  const seedsA2 = ["2°1°", "4°1°", "6°1°", "8°1°"];
+const seedsA1 = ["1°1°", "4°1°", "5°1°", "8°1°"];
+const seedsA2 = ["2°1°", "3°1°", "6°1°", "7°1°"];
 
   const zonaA1 = generarLigaSeeds(seedsA1, {
     idaVuelta: idaVueltaGlobal,
