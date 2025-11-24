@@ -110,6 +110,58 @@ function generarPartidosDesdeModeloEvita(torneo, modeloId) {
 // DÍAS DEL TORNEO (Día 1, Día 2, …)
 // =====================
 
+// Definimos qué significa cada tipo de día en términos de horario base.
+// Estos valores se pueden sobreescribir manualmente en la grilla, pero sirven
+// como fallback para que el scheduler no dependa de un rango global.
+const DAY_TYPE_TIME_DEFAULTS = {
+  full: { min: "09:00", max: "22:00" },
+  half: { min: "09:00", max: "13:00" },
+};
+
+function normalizeDayConfig(base, indexZeroBased) {
+  const dc = Object.assign(
+    {
+      index: (indexZeroBased ?? 0) + 1,
+      type: "full",
+      timeMin: null,
+      timeMax: null,
+    },
+    base || {}
+  );
+
+  const defaults = DAY_TYPE_TIME_DEFAULTS[dc.type] || DAY_TYPE_TIME_DEFAULTS.full;
+  const minVal = parseTimeToMinutes(dc.timeMin || defaults.min);
+  const maxVal = parseTimeToMinutes(dc.timeMax || defaults.max);
+
+  const min =
+    minVal === null ? defaults.min : minutesToTimeStr(Math.max(minVal, 0));
+  const max =
+    maxVal === null ? defaults.max : minutesToTimeStr(Math.max(maxVal, 0));
+
+  const minMinutes = parseTimeToMinutes(min);
+  let maxMinutes = parseTimeToMinutes(max);
+  if (
+    minMinutes !== null &&
+    maxMinutes !== null &&
+    maxMinutes <= minMinutes
+  ) {
+    maxMinutes = minMinutes + 60; // garantizamos al menos un slot
+  }
+
+  // Día 5 (idx 4) no puede pasar de las 14:00
+  const clampMax = indexZeroBased === 4 ? "14:00" : null;
+  const finalMax = clampMax
+    ? minutesToTimeStr(
+        Math.min(
+          maxMinutes ?? parseTimeToMinutes(max) ?? parseTimeToMinutes(defaults.max),
+          parseTimeToMinutes(clampMax)
+        )
+      )
+    : minutesToTimeStr(maxMinutes ?? parseTimeToMinutes(max) ?? parseTimeToMinutes(defaults.max));
+
+  return Object.assign({}, dc, { timeMin: min, timeMax: finalMax });
+}
+
 // Construye/actualiza t.dayConfigs según fecha inicio/fin
 function ensureDayConfigs(t) {
   if (!t) return;
@@ -137,18 +189,21 @@ function ensureDayConfigs(t) {
     const existing = previous.find((dc) => dc.date === dateStr);
 
     const baseType = existing && existing.type ? existing.type : "full";
-    const baseMin =
-      (existing && existing.timeMin) || t.dayTimeMin || "09:00";
-    const baseMax =
-      (existing && existing.timeMax) || t.dayTimeMax || "22:00";
 
-    result.push({
-      index: dayIndex + 1, // Día 1, Día 2...
-      date: dateStr,
-      type: baseType, // "full" | "half" | "off"
-      timeMin: baseMin,
-      timeMax: baseMax,
-    });
+    result.push(
+      normalizeDayConfig(
+        {
+          index: dayIndex + 1, // Día 1, Día 2...
+          date: dateStr,
+          type: baseType, // "full" | "half" | "off"
+          timeMin:
+            (existing && existing.timeMin) || t.dayTimeMin || DAY_TYPE_TIME_DEFAULTS.full.min,
+          timeMax:
+            (existing && existing.timeMax) || t.dayTimeMax || DAY_TYPE_TIME_DEFAULTS.full.max,
+        },
+        dayIndex
+      )
+    );
   }
 
   t.dayConfigs = result;
@@ -220,7 +275,11 @@ function renderDayConfigs() {
     sel.addEventListener("change", () => {
       const idx = parseInt(sel.getAttribute("data-day-index"), 10);
       if (!tCurrent.dayConfigs || !tCurrent.dayConfigs[idx]) return;
-      tCurrent.dayConfigs[idx].type = sel.value;
+      tCurrent.dayConfigs[idx] = normalizeDayConfig(
+        Object.assign({}, tCurrent.dayConfigs[idx], { type: sel.value }),
+        idx
+      );
+      renderDayConfigs();
       if (typeof upsertCurrentTournament === "function") {
         upsertCurrentTournament();
       }
@@ -232,7 +291,10 @@ function renderDayConfigs() {
     inp.addEventListener("change", () => {
       const idx = parseInt(inp.getAttribute("data-day-index"), 10);
       if (!tCurrent.dayConfigs || !tCurrent.dayConfigs[idx]) return;
-      tCurrent.dayConfigs[idx].timeMin = inp.value;
+      tCurrent.dayConfigs[idx] = normalizeDayConfig(
+        Object.assign({}, tCurrent.dayConfigs[idx], { timeMin: inp.value }),
+        idx
+      );
       if (typeof upsertCurrentTournament === "function") {
         upsertCurrentTournament();
       }
@@ -244,7 +306,10 @@ function renderDayConfigs() {
     inp.addEventListener("change", () => {
       const idx = parseInt(inp.getAttribute("data-day-index"), 10);
       if (!tCurrent.dayConfigs || !tCurrent.dayConfigs[idx]) return;
-      tCurrent.dayConfigs[idx].timeMax = inp.value;
+      tCurrent.dayConfigs[idx] = normalizeDayConfig(
+        Object.assign({}, tCurrent.dayConfigs[idx], { timeMax: inp.value }),
+        idx
+      );
       if (typeof upsertCurrentTournament === "function") {
         upsertCurrentTournament();
       }
@@ -1869,22 +1934,14 @@ function asignarHorarios(matches, options = {}) {
   // =====================
   const slots = [];
 
+  dayConfigs = dayConfigs.map((dc, idx) => normalizeDayConfig(dc, idx));
+
   dayConfigs.forEach((dc, idx) => {
     if (!dc || dc.type === "off") return; // Día en el que no se juega
 
     const dateStr = dc.date;
-    const minStr =
-      dc.timeMin ||
-      options.dayTimeMin ||
-      (appState.currentTournament &&
-        appState.currentTournament.dayTimeMin) ||
-      "09:00";
-    const maxStr =
-      dc.timeMax ||
-      options.dayTimeMax ||
-      (appState.currentTournament &&
-        appState.currentTournament.dayTimeMax) ||
-      "22:00";
+    const minStr = dc.timeMin;
+    const maxStr = dc.timeMax;
 
     const minMin = parseTimeToMinutes(minStr);
     const maxMin = parseTimeToMinutes(maxStr);
@@ -1934,9 +1991,9 @@ function asignarHorarios(matches, options = {}) {
   const maxMatchesPerDay = matches.length; // sin límite real
 
   function puedeJugarEnSlot(m, slot, restOverride) {
-      if (m && m.isByeMatch) {
-    return false;
-  }
+    if (m && m.isByeMatch) {
+      return false;
+    }
     const rest = typeof restOverride === "number" ? restOverride : restGlobal;
     const home = m.homeTeamId;
     const away = m.awayTeamId;
@@ -2829,6 +2886,8 @@ function initFixtureGeneration() {
     t.restMinMinutes = restMinMinutes;
 
     // 👉 Puente entre t.dayConfigs (tabla de días) y t.schedule.dayConfigs
+    ensureDayConfigs(t);
+
     const dayConfigsFromState =
       (Array.isArray(t.dayConfigs) && t.dayConfigs.length)
         ? t.dayConfigs
