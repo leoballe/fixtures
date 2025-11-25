@@ -1,118 +1,185 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/index.html b/index.html
-index fa3d1ea83139b23c7c1650906ddf3232687063d3..71f4ccd6ed7cc74af30cbe7f9a8d654aadb2f6fb 100644
---- a/index.html
-+++ b/index.html
-@@ -1,44 +1,44 @@
- <!DOCTYPE html>
- <html lang="es">
- <head>
-   <meta charset="utf-8" />
-   <meta name="viewport" content="width=device-width, initial-scale=1" />
-   <title>Fixture Planner</title>
-   <link rel="stylesheet" href="css/styles.css" />
-   <!-- Librerías para exportar PDF e imagen -->
-   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
-   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
-   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.3/dist/jspdf.plugin.autotable.min.js" defer></script>
- 
- </head>
- <body>
-   <div class="app">
-     <header class="app-header">
-       <div class="brand">
-         <span class="brand-title">Fixture Planner</span>
--        <span class="brand-subtitle">v0.3 · Beta</span>
-+        <span id="build-stamp" class="brand-subtitle">v0.3 · Beta</span>
-       </div>
-       <nav class="app-nav">
-         <button id="btn-new-tournament" class="btn primary">Nuevo torneo</button>
-         <button id="btn-tournament-list" class="btn ghost">Mis torneos</button>
-       </nav>
-     </header>
- 
-     <main class="app-main">
-       <aside class="sidebar">
-         <ol class="steps">
-           <li class="step-item active" data-step="1">1. Datos del torneo</li>
-           <li class="step-item" data-step="2">2. Equipos y zonas</li>
-           <li class="step-item" data-step="3">3. Formato</li>
-           <li class="step-item" data-step="4">4. Fechas y canchas</li>
-           <li class="step-item" data-step="5">5. Generar fixture</li>
-           <li class="step-item" data-step="6">6. Reportes / exportar</li>
-         </ol>
-       </aside>
- 
-       <section class="content">
- 
-         <!-- STEP 1: DATOS GENERALES -->
-         <section id="step-1" class="step-panel active">
-           <h2>1. Datos generales del torneo</h2>
-           <div class="form-grid">
-@@ -129,54 +129,62 @@
-                   <!-- Filas generadas por JS -->
-                 </tbody>
-               </table>
-             </div>
-           </div>
- 
-           <div class="panel-footer">
-             <button class="btn ghost" data-prev-step="1">Volver</button>
-             <button class="btn primary" data-next-step="3">Continuar</button>
-           </div>
-         </section>
- 
-         <!-- STEP 3: FORMATO -->
-         <section id="step-3" class="step-panel">
-           <h2>3. Formato de competencia</h2>
- 
-           <div class="form-grid">
-             <label>
-               Tipo de formato
- <select id="t-format-type">
-   <option value="liga">Liga (todos contra todos)</option>
-   <option value="zonas">Zonas (fase única)</option>
-   <option value="zonas-playoffs">Zonas + Playoffs</option>
-   <option value="eliminacion">Eliminación directa</option>
-   <option value="especial-8x3">
--    Modelo especial Evita 24 equipos (8×3)
-+    Modelo especial Evita 21–24 equipos (7–8×3)
-   </option>
- </select>
- 
-+              <p class="text-muted">
-+                El modelo Evita admite 21 a 24 equipos. Con 21 equipos se usan
-+                7 zonas de 3 (3 rondas), el mejor 2° sube a la Zona A1 y las
-+                llaves de 2° y 3° se reordenan tal como indica el manual.
-+              </p>
-+
-+              <div id="format-info" class="info-box text-muted"></div>
-+
-             </label>
- 
-             <div id="format-liga-options" class="subpanel">
-               <h3>Liga</h3>
-               <label>
-                 Rondas
-                 <select id="liga-rounds">
-                   <option value="ida">Solo ida</option>
-                   <option value="ida-vuelta">Ida y vuelta</option>
-                 </select>
-               </label>
-             </div>
- 
-             <div id="format-zonas-options" class="subpanel">
-               <h3>Zonas</h3>
-               <label>
-                 Clasificados por zona
-                 <input type="number" id="zonas-qualifiers" min="1" value="2" />
-               </label>
-               <label>
-                 ¿Incluir mejores terceros / segundos?
-                 <select id="zonas-best-places">
-                   <option value="none">No</option>
-                   <option value="best-seconds">Mejores segundos</option>
-                   <option value="best-thirds">Mejores terceros</option>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fixture Planner</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <!-- Librerías para exportar PDF e imagen -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.3/dist/jspdf.plugin.autotable.min.js" defer></script>
+
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-title">Fixture Planner</span>
+        <span class="brand-subtitle">v0.3 · Beta</span>
+      </div>
+      <nav class="app-nav">
+        <button id="btn-new-tournament" class="btn primary">Nuevo torneo</button>
+        <button id="btn-tournament-list" class="btn ghost">Mis torneos</button>
+      </nav>
+    </header>
+
+    <main class="app-main">
+      <aside class="sidebar">
+        <ol class="steps">
+          <li class="step-item active" data-step="1">1. Datos del torneo</li>
+          <li class="step-item" data-step="2">2. Equipos y zonas</li>
+          <li class="step-item" data-step="3">3. Formato</li>
+          <li class="step-item" data-step="4">4. Fechas y canchas</li>
+          <li class="step-item" data-step="5">5. Generar fixture</li>
+          <li class="step-item" data-step="6">6. Reportes / exportar</li>
+        </ol>
+      </aside>
+
+      <section class="content">
+
+        <!-- STEP 1: DATOS GENERALES -->
+        <section id="step-1" class="step-panel active">
+          <h2>1. Datos generales del torneo</h2>
+          <div class="form-grid">
+            <label>
+              Nombre del torneo
+              <input type="text" id="t-name" placeholder="Ej: Evita 2026 – Fútbol Sub14 – Masc." />
+            </label>
+
+            <label>
+              Categoría
+              <input type="text" id="t-category" placeholder="Ej: Sub14 Masculino" />
+            </label>
+
+            <label>
+              Rango de fechas
+              <div class="inline">
+                <input type="date" id="t-date-start" />
+                <span>hasta</span>
+                <input type="date" id="t-date-end" />
+              </div>
+            </label>
+
+            <label>
+              Tipo de almacenamiento
+              <select id="t-storage-mode">
+                <option value="local">Navegador (LocalStorage)</option>
+                <option value="cloud">Nube (Firebase, a futuro)</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="panel-footer">
+            <button class="btn primary" data-next-step="2">Continuar</button>
+          </div>
+        </section>
+
+        <!-- STEP 2: EQUIPOS Y ZONAS -->
+        <section id="step-2" class="step-panel">
+          <h2>2. Equipos y zonas</h2>
+
+          <div class="panel-row">
+            <div class="panel-col">
+              <h3>Equipos</h3>
+              <div class="form-grid">
+                <label>
+                  Nombre corto
+                  <input type="text" id="team-short" placeholder="Ej: CABA" />
+                </label>
+                <label>
+                  Nombre largo
+                  <input type="text" id="team-long" placeholder="Ej: Ciudad Autónoma de Buenos Aires" />
+                </label>
+                <label>
+                  Procedencia (provincia / ciudad / club)
+                  <input type="text" id="team-origin" placeholder="Ej: CABA / Club X" />
+                </label>
+                <label>
+                  Categoría
+                  <input type="text" id="team-category" placeholder="Ej: Sub14 Masculino" />
+                </label>
+                <label>
+                  Zona
+                  <input type="text" id="team-zone" placeholder="Ej: A, B, C..." />
+                </label>
+              </div>
+              <div class="panel-footer">
+                <button id="btn-add-team" class="btn primary">Agregar equipo</button>
+                <button id="btn-import-csv" class="btn ghost">Importar CSV desde sorteador</button>
+                <input type="file" id="teams-csv-input" accept=".csv" hidden />
+              </div>
+            </div>
+
+            <div class="panel-col">
+              <h3>Listado de equipos (torneo actual)</h3>
+              <table class="data-table" id="teams-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Zona</th>
+                    <th>Nombre corto</th>
+                    <th>Nombre largo</th>
+                    <th>Procedencia</th>
+                    <th>Categoría</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Filas generadas por JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel-footer">
+            <button class="btn ghost" data-prev-step="1">Volver</button>
+            <button class="btn primary" data-next-step="3">Continuar</button>
+          </div>
+        </section>
+
+        <!-- STEP 3: FORMATO -->
+        <section id="step-3" class="step-panel">
+          <h2>3. Formato de competencia</h2>
+
+          <div class="form-grid">
+            <label>
+              Tipo de formato
+<select id="t-format-type">
+  <option value="liga">Liga (todos contra todos)</option>
+  <option value="zonas">Zonas (fase única)</option>
+  <option value="zonas-playoffs">Zonas + Playoffs</option>
+  <option value="eliminacion">Eliminación directa</option>
+  <option value="especial-8x3">
+    Modelo especial Evita 24 equipos (8×3)
+  </option>
+</select>
+
+            </label>
+
+            <div id="format-liga-options" class="subpanel">
+              <h3>Liga</h3>
+              <label>
+                Rondas
+                <select id="liga-rounds">
+                  <option value="ida">Solo ida</option>
+                  <option value="ida-vuelta">Ida y vuelta</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="format-zonas-options" class="subpanel">
+              <h3>Zonas</h3>
+              <label>
+                Clasificados por zona
+                <input type="number" id="zonas-qualifiers" min="1" value="2" />
+              </label>
+              <label>
+                ¿Incluir mejores terceros / segundos?
+                <select id="zonas-best-places">
+                  <option value="none">No</option>
+                  <option value="best-seconds">Mejores segundos</option>
+                  <option value="best-thirds">Mejores terceros</option>
                   <option value="best-second-third">Mejores 2° y 3°</option>
                 </select>
               </label>
