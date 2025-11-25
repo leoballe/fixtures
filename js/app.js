@@ -5,6 +5,9 @@
 // - Exportar CSV, PNG, PDF (texto con jsPDF + autoTable)
 // - Playoffs automáticos desde zonas con IDs de partido (P1, P2...) y refs GP / PP
 
+// Marca visible de build para que sea fácil saber si la versión desplegada es la más reciente
+const APP_BUILD_STAMP = "v0.3 · Actualizado 2025-05-19 (Evita 21 equipos)";
+
 // =====================
 //  ESTADO GLOBAL
 // =====================
@@ -2417,6 +2420,7 @@ function reemplazarCodigoEnSeed(seedLabel, codeMap) {
 // =====================
 
 document.addEventListener("DOMContentLoaded", () => {
+  renderBuildStamp();
   loadTournamentsFromLocalStorage();
   startNewTournament();
   initNavigation();
@@ -2431,6 +2435,15 @@ document.addEventListener("DOMContentLoaded", () => {
   initTournamentsModal(); // NUEVO
 
 });
+
+function renderBuildStamp() {
+  const badge = document.getElementById("build-stamp");
+  if (!badge) return;
+
+  badge.textContent = APP_BUILD_STAMP;
+  badge.title =
+    "Versión en vivo. Si no ves esta fecha en la página publicada, recargá con Ctrl+F5.";
+}
 
 function startNewTournament() {
   appState.currentTournament = createEmptyTournament();
