@@ -2623,6 +2623,8 @@ function renderTeamsTable() {
       renderTeamsTable();
     });
   });
+
+  renderFormatInfo();
 }
 
 function clearTeamInputs() {
@@ -2757,6 +2759,7 @@ function initFormatSection() {
     }
 
     refreshFormatPanels(fmt.type || "liga");
+    renderFormatInfo();
   }
 
   function updateFormat() {
@@ -2810,6 +2813,7 @@ function initFormatSection() {
 
     upsertCurrentTournament();
     refreshFormatPanels(t.format.type);
+    renderFormatInfo();
   }
 
   [
@@ -2829,6 +2833,72 @@ function initFormatSection() {
 
   // Al inicializar, reflejamos el estado actual del torneo
   syncFromState();
+}
+
+function renderFormatInfo() {
+  const infoBox = document.getElementById("format-info");
+  if (!infoBox) return;
+
+  const t = appState.currentTournament;
+  if (!t) {
+    infoBox.textContent = "Cargá al menos un torneo para ver el detalle del formato.";
+    return;
+  }
+
+  const fmtType = t.format && t.format.type;
+  if (fmtType !== "especial-8x3") {
+    infoBox.innerHTML =
+      "<strong>Detalle del formato</strong><br>" +
+      "Seleccioná \"Modelo especial Evita 21–24 equipos (7–8×3)\" para ver cómo se acomodan zonas y llaves.";
+    return;
+  }
+
+  const totalEquipos = Array.isArray(t.teams) ? t.teams.length : 0;
+  const zonasDetectadas = new Set();
+  (t.teams || []).forEach((team) => {
+    const z = (team.zone || "").trim();
+    if (z) zonasDetectadas.add(z);
+  });
+
+  const zonasEsperadas = totalEquipos === 21 ? 7 : 8;
+  const usaSieteZonas = totalEquipos === 21;
+
+  const mensajeZonas =
+    "Zonas detectadas: " +
+    zonasDetectadas.size +
+    " (se esperan " +
+    zonasEsperadas +
+    ").";
+
+  const mensajeLlaveB = usaSieteZonas
+    ? "Llave 9–16 (2°): 2°2° vs 2°3°, 5°2° vs 6°2°, 4°2° vs 7°2°, 1°3° vs 3°2°."
+    : "Llave 9–16 (2°): se mantiene el patrón original de 8×3 (sin subir segundos).";
+
+  const mensajeLlaveC = usaSieteZonas
+    ? "Llave 17–21 (3°): 3°3° y 4°3° arrancan con BYE; 5°3° espera en semifinal y el perdedor de 6°3° vs 7°3° queda 21°."
+    : "Llave 17–24 (3°): se asignan los BYE según la cantidad de equipos (manual Evita).";
+
+  const encabezado =
+    "<strong>Modelo Evita (" +
+    (totalEquipos || "?") +
+    " equipos)</strong><br>" +
+    (usaSieteZonas
+      ? "Con 21 equipos se usan 7 zonas de 3 (3 rondas) y el mejor 2° sube a la Zona A1."
+      : "Con 22 a 24 equipos se usa la estructura base de 8 zonas con los BYE oficiales.");
+
+  infoBox.innerHTML =
+    encabezado +
+    "<ul>" +
+    "<li>" +
+    mensajeZonas +
+    "</li>" +
+    "<li>" +
+    mensajeLlaveB +
+    "</li>" +
+    "<li>" +
+    mensajeLlaveC +
+    "</li>" +
+    "</ul>";
 }
 
 
