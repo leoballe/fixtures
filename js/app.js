@@ -9,21 +9,21 @@
 //  ESTADO GLOBAL
 // =====================
 // =====================
-// MODELOS EVITA (24 equipos)
+// MODELOS EVITA (21–24 equipos)
 // =====================
 
 
 const EVITA_MODELS = {
   EVITA_24_8x3_NORMAL_5D_2C: {
     id: "EVITA_24_8x3_NORMAL_5D_2C",
-    nombre: "24 equipos · 8×3 · 5 días · 2 canchas (normal)",
+    nombre: "21–24 equipos · 7–8×3 · 5 días · 2 canchas (normal)",
     descripcion:
-      "Modelo Evita con 8 zonas de 3 equipos, fase de zonas, grupos A1/A2 y definición de puestos 1 al 24.",
+      "Modelo Evita con 7 u 8 zonas de 3 equipos, fase de zonas, grupos A1/A2 y definición de puestos 1 al 24.",
 
     // Metadatos básicos del modelo
     meta: {
       equiposEsperados: 24,
-      estructuraZonas: "8x3",        // 8 zonas de 3
+      estructuraZonas: "7-8x3",        // 7 u 8 zonas de 3
       diasRecomendados: 5,
       canchasRecomendadas: 2,
       // En el futuro podemos usar esto para advertir si faltan/e sobran equipos, días, etc.
@@ -1012,9 +1012,9 @@ function generarLigaSeeds(seedLabels, options) {
 }
 
 // =====================
-//  FORMATO ESPECIAL 8x3 (22–24 EQUIPOS)
+//  FORMATO ESPECIAL 8x3 (21–24 EQUIPOS)
 // =====================
-//  FORMATO ESPECIAL 8x3 (22–24 EQUIPOS)
+//  FORMATO ESPECIAL 8x3 (21–24 EQUIPOS)
 //  - 24 equipos: 8 zonas de 3
 //  - 23 equipos: 7 zonas de 3 + 1 zona de 2 (ida y vuelta en la de 2)
 //  - 22 equipos: 6 zonas de 3 + 2 zonas de 2 (ida y vuelta en las de 2)
@@ -1034,14 +1034,20 @@ function generarEspecial8x3(t) {
     teamsWithZone.add(team.id);
   });
 
+  const totalEquipos = t.teams.length;
+
   const zoneNames = Object.keys(zonesMap).sort((a, b) =>
     a.localeCompare(b, "es", { numeric: true, sensitivity: "base" })
   );
 
-  // Siempre trabajamos con 8 zonas (Z1..Z8)
-  if (zoneNames.length !== 8) {
+  const zonasEsperadas = totalEquipos === 21 ? 7 : 8;
+
+  // Siempre trabajamos con 8 zonas (Z1..Z8), salvo el caso de 21 equipos (7 zonas)
+  if (zoneNames.length !== zonasEsperadas) {
     alert(
-      "El formato especial 8×3 requiere exactamente 8 zonas.\n" +
+      "El formato especial 8×3 requiere exactamente " +
+        zonasEsperadas +
+        " zonas.\n" +
         "Actualmente se detectan " +
         zoneNames.length +
         " zonas. Verificá la columna 'Zona' de los equipos."
@@ -1066,8 +1072,6 @@ function generarEspecial8x3(t) {
       zonasInvalidas.push({ zona: z, count });
     }
   }
-
-  const totalEquipos = t.teams.length;
 
   // Sólo se permiten zonas de 2 o 3 equipos
   if (zonasInvalidas.length) {
@@ -1119,9 +1123,21 @@ function generarEspecial8x3(t) {
       );
       return [];
     }
+  } else if (totalEquipos === 21) {
+    if (zonasCon3 !== 7 || zonasCon2 !== 0) {
+      alert(
+        "Para 21 equipos el formato especial 8×3 requiere 7 zonas de 3 equipos.\n" +
+          "Detectadas: " +
+          zonasCon3 +
+          " zonas de 3 y " +
+          zonasCon2 +
+          " zonas de 2."
+      );
+      return [];
+    }
   } else {
     alert(
-      "Por ahora el formato especial 8×3 está preparado sólo para 22, 23 o 24 equipos.\n" +
+      "Por ahora el formato especial 8×3 está preparado sólo para 21, 22, 23 o 24 equipos.\n" +
         "Equipos detectados en zonas: " +
         totalEquipos +
         "."
@@ -1131,7 +1147,9 @@ function generarEspecial8x3(t) {
 
   if (totalEnZonas !== totalEquipos) {
     alert(
-      "Hay equipos sin zona asignada o con una zona distinta de las 8 definidas.\n" +
+      "Hay equipos sin zona asignada o con una zona distinta de las " +
+        zonasEsperadas +
+        " definidas.\n" +
         "Equipos totales: " +
         totalEquipos +
         " · Equipos en zonas válidas: " +
@@ -1181,9 +1199,12 @@ function generarEspecial8x3(t) {
   const z7 = zoneNames[6];
   const z8 = zoneNames[7];
 
-  // Seeds de los mejores 1°: 1°1° .. 8°1°
-const seedsA1 = ["1°1°", "4°1°", "5°1°", "8°1°"];
-const seedsA2 = ["2°1°", "3°1°", "6°1°", "7°1°"];
+  // Seeds de los mejores 1°: 1°1° .. 8°1° (o 7°1° + 1°2° si hay 21 equipos)
+  const seedsA1 =
+    totalEquipos === 21
+      ? ["1°1°", "4°1°", "5°1°", "1°2°"]
+      : ["1°1°", "4°1°", "5°1°", "8°1°"];
+  const seedsA2 = ["2°1°", "3°1°", "6°1°", "7°1°"];
 
   const zonaA1 = generarLigaSeeds(seedsA1, {
     idaVuelta: idaVueltaGlobal,
@@ -1283,141 +1304,277 @@ const seedsA2 = ["2°1°", "3°1°", "6°1°", "7°1°"];
     };
   }
 
- const phase9_16 = "Puestos 9-16";
-const zone9_16 = "Puestos 9-16";
+  const phase9_16 = "Puestos 9-16";
+  const zone9_16 = "Puestos 9-16";
 
-// Ronda 1 (mejores 2° con nuevo patrón)
-const m9_1 = crearMatchClasif(
-  "P9_1",
-  "1°2°",
-  "8°2°",
-  1,
-  phase9_16,
-  zone9_16
-);
-const m9_2 = crearMatchClasif(
-  "P9_2",
-  "4°2°",
-  "5°2°",
-  1,
-  phase9_16,
-  zone9_16
-);
-const m9_3 = crearMatchClasif(
-  "P9_3",
-  "3°2°",
-  "6°2°",
-  1,
-  phase9_16,
-  zone9_16
-);
-const m9_4 = crearMatchClasif(
-  "P9_4",
-  "2°2°",
-  "7°2°",
-  1,
-  phase9_16,
-  zone9_16
-);
+  if (totalEquipos === 21) {
+    // Sembrado especial: 2°2° y 1°3° reemplazan al 1°2° que sube a A1
+    const m9_1 = crearMatchClasif(
+      "P9_1",
+      "2°2°",
+      "2°3°",
+      1,
+      phase9_16,
+      zone9_16
+    );
+    const m9_2 = crearMatchClasif(
+      "P9_2",
+      "5°2°",
+      "6°2°",
+      1,
+      phase9_16,
+      zone9_16
+    );
+    const m9_3 = crearMatchClasif(
+      "P9_3",
+      "4°2°",
+      "7°2°",
+      1,
+      phase9_16,
+      zone9_16
+    );
+    const m9_4 = crearMatchClasif(
+      "P9_4",
+      "1°3°",
+      "3°2°",
+      1,
+      phase9_16,
+      zone9_16
+    );
 
-  // Ronda 2 (ganadores y perdedores)
-  const m9_5 = crearMatchDesdeGP_PP(
-    "P9_5",
-    m9_1.code,
-    "GP",
-    m9_2.code,
-    "GP",
-    2,
-    phase9_16,
-    zone9_16
-  );
-  const m9_6 = crearMatchDesdeGP_PP(
-    "P9_6",
-    m9_3.code,
-    "GP",
-    m9_4.code,
-    "GP",
-    2,
-    phase9_16,
-    zone9_16
-  );
-  const m9_7 = crearMatchDesdeGP_PP(
-    "P9_7",
-    m9_1.code,
-    "PP",
-    m9_2.code,
-    "PP",
-    2,
-    phase9_16,
-    zone9_16
-  );
-  const m9_8 = crearMatchDesdeGP_PP(
-    "P9_8",
-    m9_3.code,
-    "PP",
-    m9_4.code,
-    "PP",
-    2,
-    phase9_16,
-    zone9_16
-  );
+    // Ronda 2 (ganadores y perdedores)
+    const m9_5 = crearMatchDesdeGP_PP(
+      "P9_5",
+      m9_1.code,
+      "GP",
+      m9_2.code,
+      "GP",
+      2,
+      phase9_16,
+      zone9_16
+    );
+    const m9_6 = crearMatchDesdeGP_PP(
+      "P9_6",
+      m9_3.code,
+      "GP",
+      m9_4.code,
+      "GP",
+      2,
+      phase9_16,
+      zone9_16
+    );
+    const m9_7 = crearMatchDesdeGP_PP(
+      "P9_7",
+      m9_1.code,
+      "PP",
+      m9_2.code,
+      "PP",
+      2,
+      phase9_16,
+      zone9_16
+    );
+    const m9_8 = crearMatchDesdeGP_PP(
+      "P9_8",
+      m9_3.code,
+      "PP",
+      m9_4.code,
+      "PP",
+      2,
+      phase9_16,
+      zone9_16
+    );
 
-  // Ronda 3 (definición de 9–16)
-  const m9_9 = crearMatchDesdeGP_PP(
-    "P9_9",
-    m9_5.code,
-    "GP",
-    m9_6.code,
-    "GP",
-    3,
-    phase9_16,
-    zone9_16
-  );
-  const m9_10 = crearMatchDesdeGP_PP(
-    "P9_10",
-    m9_5.code,
-    "PP",
-    m9_6.code,
-    "PP",
-    3,
-    phase9_16,
-    zone9_16
-  );
-  const m9_11 = crearMatchDesdeGP_PP(
-    "P9_11",
-    m9_7.code,
-    "GP",
-    m9_8.code,
-    "GP",
-    3,
-    phase9_16,
-    zone9_16
-  );
-  const m9_12 = crearMatchDesdeGP_PP(
-    "P9_12",
-    m9_7.code,
-    "PP",
-    m9_8.code,
-    "PP",
-    3,
-    phase9_16,
-    zone9_16
-  );
+    // Ronda 3 (definición de 9–16)
+    const m9_9 = crearMatchDesdeGP_PP(
+      "P9_9",
+      m9_5.code,
+      "GP",
+      m9_6.code,
+      "GP",
+      3,
+      phase9_16,
+      zone9_16
+    );
+    const m9_10 = crearMatchDesdeGP_PP(
+      "P9_10",
+      m9_5.code,
+      "PP",
+      m9_6.code,
+      "PP",
+      3,
+      phase9_16,
+      zone9_16
+    );
+    const m9_11 = crearMatchDesdeGP_PP(
+      "P9_11",
+      m9_7.code,
+      "GP",
+      m9_8.code,
+      "GP",
+      3,
+      phase9_16,
+      zone9_16
+    );
+    const m9_12 = crearMatchDesdeGP_PP(
+      "P9_12",
+      m9_7.code,
+      "PP",
+      m9_8.code,
+      "PP",
+      3,
+      phase9_16,
+      zone9_16
+    );
 
-  allMatches.push(
-    m9_1,
-    m9_2,
-    m9_3,
-    m9_4,
-    m9_5,
-    m9_6,
-    m9_7,
-    m9_8,
-    m9_9,
-    m9_10,
-    m9_11,
-    m9_12
-  );
+    allMatches.push(
+      m9_1,
+      m9_2,
+      m9_3,
+      m9_4,
+      m9_5,
+      m9_6,
+      m9_7,
+      m9_8,
+      m9_9,
+      m9_10,
+      m9_11,
+      m9_12
+    );
+  } else {
+    // Ronda 1 (mejores 2° con nuevo patrón)
+    const m9_1 = crearMatchClasif(
+      "P9_1",
+      "1°2°",
+      "8°2°",
+      1,
+      phase9_16,
+      zone9_16
+    );
+    const m9_2 = crearMatchClasif(
+      "P9_2",
+      "4°2°",
+      "5°2°",
+      1,
+      phase9_16,
+      zone9_16
+    );
+    const m9_3 = crearMatchClasif(
+      "P9_3",
+      "3°2°",
+      "6°2°",
+      1,
+      phase9_16,
+      zone9_16
+    );
+    const m9_4 = crearMatchClasif(
+      "P9_4",
+      "2°2°",
+      "7°2°",
+      1,
+      phase9_16,
+      zone9_16
+    );
+
+    // Ronda 2 (ganadores y perdedores)
+    const m9_5 = crearMatchDesdeGP_PP(
+      "P9_5",
+      m9_1.code,
+      "GP",
+      m9_2.code,
+      "GP",
+      2,
+      phase9_16,
+      zone9_16
+    );
+    const m9_6 = crearMatchDesdeGP_PP(
+      "P9_6",
+      m9_3.code,
+      "GP",
+      m9_4.code,
+      "GP",
+      2,
+      phase9_16,
+      zone9_16
+    );
+    const m9_7 = crearMatchDesdeGP_PP(
+      "P9_7",
+      m9_1.code,
+      "PP",
+      m9_2.code,
+      "PP",
+      2,
+      phase9_16,
+      zone9_16
+    );
+    const m9_8 = crearMatchDesdeGP_PP(
+      "P9_8",
+      m9_3.code,
+      "PP",
+      m9_4.code,
+      "PP",
+      2,
+      phase9_16,
+      zone9_16
+    );
+
+    // Ronda 3 (definición de 9–16)
+    const m9_9 = crearMatchDesdeGP_PP(
+      "P9_9",
+      m9_5.code,
+      "GP",
+      m9_6.code,
+      "GP",
+      3,
+      phase9_16,
+      zone9_16
+    );
+    const m9_10 = crearMatchDesdeGP_PP(
+      "P9_10",
+      m9_5.code,
+      "PP",
+      m9_6.code,
+      "PP",
+      3,
+      phase9_16,
+      zone9_16
+    );
+    const m9_11 = crearMatchDesdeGP_PP(
+      "P9_11",
+      m9_7.code,
+      "GP",
+      m9_8.code,
+      "GP",
+      3,
+      phase9_16,
+      zone9_16
+    );
+    const m9_12 = crearMatchDesdeGP_PP(
+      "P9_12",
+      m9_7.code,
+      "PP",
+      m9_8.code,
+      "PP",
+      3,
+      phase9_16,
+      zone9_16
+    );
+
+    allMatches.push(
+      m9_1,
+      m9_2,
+      m9_3,
+      m9_4,
+      m9_5,
+      m9_6,
+      m9_7,
+      m9_8,
+      m9_9,
+      m9_10,
+      m9_11,
+      m9_12
+    );
+  }
+
 
   // ---------------------
   // FASE 5: PUESTOS 17–24 (3° de zonas / mejores 3°)
@@ -1425,40 +1582,40 @@ const m9_4 = crearMatchClasif(
   const phase17_24 = "Puestos 17-24";
   const zone17_24 = "Puestos 17-24";
 
-if (totalEquipos === 24) {
-  // Caso base: 8 terceros, sin BYE (mejores 3° con nuevo patrón)
-  const m17_1 = crearMatchClasif(
-    "P17_1",
-    "1°3°",
-    "8°3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  const m17_2 = crearMatchClasif(
-    "P17_2",
-    "4°3°",
-    "5°3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  const m17_3 = crearMatchClasif(
-    "P17_3",
-    "3°3°",
-    "6°3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  const m17_4 = crearMatchClasif(
-    "P17_4",
-    "2°3°",
-    "7°3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
+  if (totalEquipos === 24) {
+    // Caso base: 8 terceros, sin BYE (mejores 3° con nuevo patrón)
+    const m17_1 = crearMatchClasif(
+      "P17_1",
+      "1°3°",
+      "8°3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    const m17_2 = crearMatchClasif(
+      "P17_2",
+      "4°3°",
+      "5°3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    const m17_3 = crearMatchClasif(
+      "P17_3",
+      "3°3°",
+      "6°3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    const m17_4 = crearMatchClasif(
+      "P17_4",
+      "2°3°",
+      "7°3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
 
     const m17_5 = crearMatchDesdeGP_PP(
       "P17_5",
@@ -1556,194 +1713,193 @@ if (totalEquipos === 24) {
       m17_11,
       m17_12
     );
-} else if (totalEquipos === 23) {
-  // 7 terceros + 1 BYE (el 1°3° pasa directo)
-  // Patrón pedido:
-  // 1°3° vs BYE
-  // 7°3° vs 4°3°
-  // 3°3° vs 5°3°
-  // 2°3° vs 6°3°
+  } else if (totalEquipos === 23) {
+    // 7 terceros + 1 BYE (el 1°3° pasa directo)
+    // Patrón pedido:
+    // 1°3° vs BYE
+    // 7°3° vs 4°3°
+    // 3°3° vs 5°3°
+    // 2°3° vs 6°3°
 
-  // Partido con BYE: 1°3° clasifica directo
-  const m17_1 = crearMatchClasif(
-    "P17_1",
-    "1°3°",
-    "BYE (1°3°)",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  m17_1.isByeMatch = true;
+    // Partido con BYE: 1°3° clasifica directo
+    const m17_1 = crearMatchClasif(
+      "P17_1",
+      "1°3°",
+      "BYE (1°3°)",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    m17_1.isByeMatch = true;
 
-  const m17_2 = crearMatchClasif(
-    "P17_2",
-    "7°3°",
-    "4°3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  const m17_3 = crearMatchClasif(
-    "P17_3",
-    "3°3°",
-    "5°3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  const m17_4 = crearMatchClasif(
-    "P17_4",
-    "2°3°",
-    "6°3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
+    const m17_2 = crearMatchClasif(
+      "P17_2",
+      "7°3°",
+      "4°3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    const m17_3 = crearMatchClasif(
+      "P17_3",
+      "3°3°",
+      "5°3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    const m17_4 = crearMatchClasif(
+      "P17_4",
+      "2°3°",
+      "6°3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
 
-  // Ronda 2 (semis y reclasif) – misma estructura GP/PP
-  const m17_5 = crearMatchDesdeGP_PP(
-    "P17_5",
-    m17_1.code,
-    "GP",
-    m17_2.code,
-    "GP",
-    2,
-    phase17_24,
-    zone17_24
-  );
-  const m17_6 = crearMatchDesdeGP_PP(
-    "P17_6",
-    m17_3.code,
-    "GP",
-    m17_4.code,
-    "GP",
-    2,
-    phase17_24,
-    zone17_24
-  );
-  const m17_7 = crearMatchDesdeGP_PP(
-    "P17_7",
-    m17_1.code,
-    "PP",
-    m17_2.code,
-    "PP",
-    2,
-    phase17_24,
-    zone17_24
-  );
-  const m17_8 = crearMatchDesdeGP_PP(
-    "P17_8",
-    m17_3.code,
-    "PP",
-    m17_4.code,
-    "PP",
-    2,
-    phase17_24,
-    zone17_24
-  );
+    // Ronda 2 (semis y reclasif) – misma estructura GP/PP
+    const m17_5 = crearMatchDesdeGP_PP(
+      "P17_5",
+      m17_1.code,
+      "GP",
+      m17_2.code,
+      "GP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+    const m17_6 = crearMatchDesdeGP_PP(
+      "P17_6",
+      m17_3.code,
+      "GP",
+      m17_4.code,
+      "GP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+    const m17_7 = crearMatchDesdeGP_PP(
+      "P17_7",
+      m17_1.code,
+      "PP",
+      m17_2.code,
+      "PP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+    const m17_8 = crearMatchDesdeGP_PP(
+      "P17_8",
+      m17_3.code,
+      "PP",
+      m17_4.code,
+      "PP",
+      2,
+      phase17_24,
+      zone17_24
+    );
 
-  // Ronda 3 (definiciones 17–24)
-  const m17_9 = crearMatchDesdeGP_PP(
-    "P17_9",
-    m17_5.code,
-    "GP",
-    m17_6.code,
-    "GP",
-    3,
-    phase17_24,
-    zone17_24
-  );
-  const m17_10 = crearMatchDesdeGP_PP(
-    "P17_10",
-    m17_5.code,
-    "PP",
-    m17_6.code,
-    "PP",
-    3,
-    phase17_24,
-    zone17_24
-  );
-  const m17_11 = crearMatchDesdeGP_PP(
-    "P17_11",
-    m17_7.code,
-    "GP",
-    m17_8.code,
-    "GP",
-    3,
-    phase17_24,
-    zone17_24
-  );
-  const m17_12 = crearMatchDesdeGP_PP(
-    "P17_12",
-    m17_7.code,
-    "PP",
-    m17_8.code,
-    "PP",
-    3,
-    phase17_24,
-    zone17_24
-  );
+    // Ronda 3 (definición de 17–24)
+    const m17_9 = crearMatchDesdeGP_PP(
+      "P17_9",
+      m17_5.code,
+      "GP",
+      m17_6.code,
+      "GP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+    const m17_10 = crearMatchDesdeGP_PP(
+      "P17_10",
+      m17_5.code,
+      "PP",
+      m17_6.code,
+      "PP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+    const m17_11 = crearMatchDesdeGP_PP(
+      "P17_11",
+      m17_7.code,
+      "GP",
+      m17_8.code,
+      "GP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+    const m17_12 = crearMatchDesdeGP_PP(
+      "P17_12",
+      m17_7.code,
+      "PP",
+      m17_8.code,
+      "PP",
+      3,
+      phase17_24,
+      zone17_24
+    );
 
-  allMatches.push(
-    m17_1,
-    m17_2,
-    m17_3,
-    m17_4,
-    m17_5,
-    m17_6,
-    m17_7,
-    m17_8,
-    m17_9,
-    m17_10,
-    m17_11,
-    m17_12
-  );
-
+    allMatches.push(
+      m17_1,
+      m17_2,
+      m17_3,
+      m17_4,
+      m17_5,
+      m17_6,
+      m17_7,
+      m17_8,
+      m17_9,
+      m17_10,
+      m17_11,
+      m17_12
+    );
   } else if (totalEquipos === 22) {
-  // 6 terceros + 2 BYE (1°3° y 2°3° pasan directo)
-  // Patrón:
-  // 1°3° vs BYE
-  // 4°3° vs 5°3°
-  // 3°3° vs 6°3°
-  // 2°3° vs BYE
+    // 6 terceros + 2 BYE (1°3° y 2°3° pasan directo)
+    // Patrón:
+    // 1°3° vs BYE
+    // 4°3° vs 5°3°
+    // 3°3° vs 6°3°
+    // 2°3° vs BYE
 
-  const m17_1 = crearMatchClasif(
-    "P17_1",
-    "1°3°",
-    "BYE (1°3°)",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  m17_1.isByeMatch = true; // BYE: no se programa
+    const m17_1 = crearMatchClasif(
+      "P17_1",
+      "1°3°",
+      "BYE (1°3°)",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    m17_1.isByeMatch = true; // BYE: no se programa
 
-  const m17_2 = crearMatchClasif(
-    "P17_2",
-    "4°3°",
-    "5°3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
+    const m17_2 = crearMatchClasif(
+      "P17_2",
+      "4°3°",
+      "5°3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
 
-  const m17_3 = crearMatchClasif(
-    "P17_3",
-    "3°3°",
-    "6°3°",
-    1,
-    phase17_24,
-    zone17_24
-  );
+    const m17_3 = crearMatchClasif(
+      "P17_3",
+      "3°3°",
+      "6°3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
 
-  const m17_4 = crearMatchClasif(
-    "P17_4",
-    "2°3°",
-    "BYE (2°3°)",
-    1,
-    phase17_24,
-    zone17_24
-  );
-  m17_4.isByeMatch = true; // segundo BYE
+    const m17_4 = crearMatchClasif(
+      "P17_4",
+      "2°3°",
+      "BYE (2°3°)",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    m17_4.isByeMatch = true; // segundo BYE
 
     const m17_5 = crearMatchDesdeGP_PP(
       "P17_5",
@@ -1841,10 +1997,91 @@ if (totalEquipos === 24) {
       m17_11,
       m17_12
     );
-  }
+  } else if (totalEquipos === 21) {
+    // 5 terceros: 3°3°, 4°3° y 5°3° arrancan con BYE; 6°3° vs 7°3° define al cuarto semifinalista
+    const m17_1 = crearMatchClasif(
+      "P17_1",
+      "3°3°",
+      "BYE (3°3°)",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    m17_1.isByeMatch = true;
 
-  return allMatches;
-}
+    const m17_2 = crearMatchClasif(
+      "P17_2",
+      "6°3°",
+      "7°3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+
+    const m17_3 = crearMatchClasif(
+      "P17_3",
+      "4°3°",
+      "BYE (4°3°)",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    m17_3.isByeMatch = true;
+
+    const m17_4 = crearMatchClasif(
+      "P17_4",
+      "BYE (5°3°)",
+      "5°3°",
+      1,
+      phase17_24,
+      zone17_24
+    );
+    m17_4.isByeMatch = true;
+
+    const m17_5 = crearMatchDesdeGP_PP(
+      "P17_5",
+      m17_1.code,
+      "GP",
+      m17_2.code,
+      "GP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+    const m17_6 = crearMatchDesdeGP_PP(
+      "P17_6",
+      m17_3.code,
+      "GP",
+      m17_4.code,
+      "GP",
+      2,
+      phase17_24,
+      zone17_24
+    );
+
+    const m17_7 = crearMatchDesdeGP_PP(
+      "P17_7",
+      m17_5.code,
+      "PP",
+      m17_6.code,
+      "PP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+    const m17_8 = crearMatchDesdeGP_PP(
+      "P17_8",
+      m17_5.code,
+      "GP",
+      m17_6.code,
+      "GP",
+      3,
+      phase17_24,
+      zone17_24
+    );
+
+    allMatches.push(m17_1, m17_2, m17_3, m17_4, m17_5, m17_6, m17_7, m17_8);
+  }
 
 
 // =====================
@@ -3035,8 +3272,8 @@ if (
     );
     const rounds = Array.from(roundsSet).sort((a, b) => a - b);
 
-    // Solo aplicamos el patrón si tenemos realmente 8 zonas y 3 rondas
-    if (zones.length === 8 && rounds.length >= 3) {
+    // Aplicamos el patrón estándar para 7 u 8 zonas con 3 rondas
+    if ((zones.length === 7 || zones.length === 8) && rounds.length >= 3) {
       const zoneRoundMap = {};
 
       fase1.forEach((m) => {
@@ -3047,35 +3284,18 @@ if (
         zoneRoundMap[z][r].push(m);
       });
 
-      const [z1, z2, z3, z4, z5, z6, z7, z8] = zones;
+      const oddZones = zones.filter((_, idx) => idx % 2 === 0); // z1, z3, z5...
+      const evenZones = zones.filter((_, idx) => idx % 2 === 1); // z2, z4, z6...
 
       const patron = [
-        // Día 1
-        { r: 1, z: z1 },
-        { r: 1, z: z3 },
-        { r: 1, z: z5 },
-        { r: 1, z: z7 },
-        { r: 1, z: z2 },
-        { r: 1, z: z4 },
-        { r: 1, z: z6 },
-        { r: 1, z: z8 },
-        { r: 2, z: z1 },
-        { r: 2, z: z3 },
-        { r: 2, z: z5 },
-        { r: 2, z: z7 },
-        // Día 2
-        { r: 2, z: z2 },
-        { r: 2, z: z4 },
-        { r: 2, z: z6 },
-        { r: 2, z: z8 },
-        { r: 3, z: z1 },
-        { r: 3, z: z3 },
-        { r: 3, z: z5 },
-        { r: 3, z: z7 },
-        { r: 3, z: z2 },
-        { r: 3, z: z4 },
-        { r: 3, z: z6 },
-        { r: 3, z: z8 },
+        // Día 1 (R1 completo + R2 impares)
+        ...oddZones.map((z) => ({ r: 1, z })),
+        ...evenZones.map((z) => ({ r: 1, z })),
+        ...oddZones.map((z) => ({ r: 2, z })),
+        // Día 2 (R2 pares + R3 completo)
+        ...evenZones.map((z) => ({ r: 2, z })),
+        ...oddZones.map((z) => ({ r: 3, z })),
+        ...evenZones.map((z) => ({ r: 3, z })),
       ];
 
       const usados = new Set();
