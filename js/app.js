@@ -34,7 +34,7 @@ const EVITA_MODELS = {
       {
         id: "F1_ZONAS",
         tipo: "zonas-roundrobin",
-        etiqueta: "Fase 1 · Zonas 8×3",
+        etiqueta: "Fase 1 · Zonas 7–8×3",
       },
       {
         id: "F2_A1A2",
@@ -1168,9 +1168,14 @@ function generarEspecial8x3(t) {
   const allMatches = [];
 
   // ---------------------
-  // FASE 1: ZONAS INICIALES (8×3, con ida y vuelta en zonas de 2)
+  // FASE 1: ZONAS INICIALES (7–8×3, con ida y vuelta en zonas de 2)
   // ---------------------
   const fase1 = [];
+  const fase1Label =
+    zonasEsperadas === 7
+      ? "Fase 1 · zonas (7×3)"
+      : "Fase 1 · zonas (8×3)";
+
   zoneNames.forEach((z) => {
     const ids = zonesMap[z];
     if (!Array.isArray(ids) || ids.length < 2) return;
@@ -1181,7 +1186,7 @@ function generarEspecial8x3(t) {
     const part = generarFixtureLiga(ids, {
       idaVuelta: idaVueltaZona,
       zone: z,
-      phase: "Fase 1 · zonas (8×3)",
+      phase: fase1Label,
     });
     fase1.push(...part);
   });
