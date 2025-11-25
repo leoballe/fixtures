@@ -16,7 +16,7 @@
     <header class="app-header">
       <div class="brand">
         <span class="brand-title">Fixture Planner</span>
-        <span class="brand-subtitle">v0.3 · Beta</span>
+        <span id="build-stamp" class="brand-subtitle">v0.3 · Beta</span>
       </div>
       <nav class="app-nav">
         <button id="btn-new-tournament" class="btn primary">Nuevo torneo</button>
@@ -151,9 +151,17 @@
   <option value="zonas-playoffs">Zonas + Playoffs</option>
   <option value="eliminacion">Eliminación directa</option>
   <option value="especial-8x3">
-    Modelo especial Evita 24 equipos (8×3)
+    Modelo especial Evita 21–24 equipos (7–8×3)
   </option>
 </select>
+
+              <p class="text-muted">
+                El modelo Evita admite 21 a 24 equipos. Con 21 equipos se usan
+                7 zonas de 3 (3 rondas), el mejor 2° sube a la Zona A1 y las
+                llaves de 2° y 3° se reordenan tal como indica el manual.
+              </p>
+
+              <div id="format-info" class="info-box text-muted"></div>
 
             </label>
 
