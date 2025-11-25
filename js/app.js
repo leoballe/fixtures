@@ -22,7 +22,7 @@ const EVITA_MODELS = {
 
     // Metadatos básicos del modelo
     meta: {
-      equiposEsperados: 24,
+      equiposEsperados: { min: 21, max: 24 },
       estructuraZonas: "7-8x3",        // 7 u 8 zonas de 3
       diasRecomendados: 5,
       canchasRecomendadas: 2,
