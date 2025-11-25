@@ -483,64 +483,6 @@ input::placeholder {
   font-size: 0.875rem;
   margin-top: 0.5rem;
 }
-diff --git a/css/styles.css b/css/styles.css
-index ac77282f88a7e7cd971a7678ad20752c612809b2..c55f03e38b8b1b53975c771a08ea75a2a8bc1248 100644
---- a/css/styles.css
-+++ b/css/styles.css
-@@ -462,34 +462,53 @@ input::placeholder {
-   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-   padding: 1.5rem;
-   overflow: hidden;
-   display: flex;
-   flex-direction: column;
- }
- 
- .modal-header {
-   display: flex;
-   align-items: center;
-   justify-content: space-between;
-   gap: 1rem;
-   margin-bottom: 1rem;
- }
- 
- .modal-body {
-   overflow: auto;
- }
- 
- .text-muted {
-   color: #9ca3af;
-   font-size: 0.875rem;
-   margin-top: 0.5rem;
- }
- 
-+.info-box {
-+  background: rgba(15, 23, 42, 0.85);
-+  border: 1px solid rgba(255, 255, 255, 0.08);
-+  border-radius: 10px;
-+  padding: 0.8rem 1rem;
-+  margin-top: 0.5rem;
-+  color: #e2e8f0;
-+  line-height: 1.4;
-+}
-+
-+.info-box ul {
-+  margin: 0.4rem 0 0.25rem 1.2rem;
-+  padding-left: 0.2rem;
-+}
-+
-+.info-box li {
-+  margin-bottom: 0.2rem;
-+}
-+
- .btn-sm {
-   font-size: 0.75rem;
-   padding: 0.15rem 0.6rem;
- }
- 
-   .panel-row {
-     grid-template-columns: 1fr;
-   }
- }
 
 .btn-sm {
   font-size: 0.75rem;
