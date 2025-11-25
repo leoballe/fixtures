@@ -1850,9 +1850,6 @@ index aebaac9c12e35b9c740fb8626041657df058b10e..5dbabb70219d122400da85a6a0965ffc
        });
  
        fase1Ordenada = ordered;
- 
-
-)
     } else {
       // Fallback: el viejo criterio zona+ronda
       fase1Ordenada.sort(ordenarZonaRonda);
