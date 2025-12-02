@@ -1,0 +1,4 @@
+Flask==3.0.0
+fpdf2==2.7.5
+pandas==2.1.4
+python-dateutil==2.8.2
