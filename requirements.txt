@@ -1,0 +1,6 @@
+flask
+fpdf2
+pandas
+python-dateutil
+gunicorn
+openpyxl
