@@ -708,23 +708,22 @@
         function parseMetaFromTeamsFilename(filename) {
           if (!filename) return null;
 
-          // quitar extensión
+          // Quitar extensión y separar por guiones bajos.
           const base = filename.replace(/\.[^/.]+$/, "");
           const partsRaw = base.split("_").map(p => p.trim()).filter(Boolean);
 
-          if (partsRaw.length < 4) return null;
+          if (partsRaw.length < 3) return null;
 
           let parts = [...partsRaw];
 
-          // detectar fecha al final (YYYY-MM-DD) si existe
+          // Detectar fecha al final (YYYY-MM-DD) si existe.
           const last = parts[parts.length - 1];
           if (/^\d{4}-\d{2}-\d{2}$/.test(last)) {
             parts.pop();
           }
 
-          // detectar sistema al final y removerlo.
-          // Importante: algunos sistemas tienen "_" en el nombre (8x3_sembrado / 6x4_sembrado),
-          // por eso hay que mirar sufijos de 2 partes antes de separar disciplina/categoría/género/modalidad.
+          // Detectar sistema al final y removerlo.
+          // Importante: algunos sistemas tienen "_" en el nombre (8x3_sembrado / 6x4_sembrado).
           const systemSuffixes = [
             ["8x3", "sembrado"],
             ["6x4", "sembrado"],
@@ -746,20 +745,62 @@
             }
           }
 
-          if (parts.length < 4) return null;
+          // Casos admitidos:
+          // 1) Disciplina_Categoria_Genero_Modalidad_sistema_fecha
+          //    Ej: BADMINTON_S15_Femenino_COMUNITARIO_8x3_2026-06-29.csv
+          // 2) Disciplina_Categoria_Modalidad_sistema_fecha
+          //    Ej: BADMINTON_S15_COMUNITARIO_4x6_2026-06-29.csv
+          //    En este caso no hay género en el nombre, entonces se autocompletan los 3 datos disponibles.
+          if (parts.length >= 4) {
+            const modality = parts.pop();
+            const gender = parts.pop();
+            const category = parts.pop();
+            const discipline = parts.join("_");
+            return { discipline, category, gender, modality };
+          }
 
-          const modality = parts.pop();
-          const gender = parts.pop();
-          const category = parts.pop();
-          const discipline = parts.join("_");
+          if (parts.length === 3) {
+            const modality = parts.pop();
+            const category = parts.pop();
+            const discipline = parts.join("_");
+            return { discipline, category, gender: "", modality };
+          }
 
-          return { discipline, category, gender, modality };
+          return null;
         }
 
         function _removePreviousCustomOption(selectElem) {
           Array.from(selectElem.options).forEach((opt) => {
             if (opt.dataset && opt.dataset.custom === "true") opt.remove();
           });
+        }
+
+        function normalizeMetaValue(value) {
+          return String(value || "")
+            .trim()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/\./g, "")
+            .replace(/\s+/g, " ")
+            .toLowerCase();
+        }
+
+        function valuesMatchForSelect(selectId, optionValue, incomingValue) {
+          const opt = normalizeMetaValue(optionValue);
+          const inc = normalizeMetaValue(incomingValue);
+          if (!opt || !inc) return false;
+
+          // Coincidencia normal.
+          if (opt === inc) return true;
+
+          // Género: permite que "Femenino" matchee con "Fem." y "Masculino" con "Masc.".
+          if (selectId === "gender_select") {
+            if ((inc === "femenino" || inc === "fem") && (opt === "fem" || opt === "femenino")) return true;
+            if ((inc === "masculino" || inc === "masc") && (opt === "masc" || opt === "masculino")) return true;
+            if ((inc === "mixto" || inc === "mixta") && (opt === "mixto" || opt === "mixta")) return true;
+          }
+
+          return false;
         }
 
         function setSelectOrCustom(selectId, customId, value, syncFn) {
@@ -770,10 +811,11 @@
           const v = (value || "").trim();
           if (!v) return;
 
-          // Si existe en el select, elegirlo
+          // Si existe en el select, elegirlo.
+          // Compara de forma tolerante: mayúsculas/minúsculas, acentos y abreviaturas de género.
           let foundValue = null;
           for (const opt of Array.from(selectElem.options)) {
-            if (((opt.value || "").trim().toLowerCase()) === v.toLowerCase()) {
+            if (valuesMatchForSelect(selectId, opt.value, v)) {
               foundValue = opt.value;
               break;
             }
@@ -784,7 +826,7 @@
             selectElem.value = foundValue;
             customInput.value = "";
           } else {
-            // Si no existe en lista (o todavía no cargaste listas), usar "escribir a mano"
+            // Si no existe en lista (o todavía no cargaste listas), usar "escribir a mano".
             customInput.value = v;
             if (typeof syncFn === "function") syncFn();
           }
@@ -794,7 +836,8 @@
           const meta = parseMetaFromTeamsFilename(filename);
           if (!meta) return;
 
-          // Importante: esto NO bloquea nada; luego podés cambiar manualmente como siempre
+          // Importante: esto NO bloquea nada; luego podés cambiar manualmente como siempre.
+          // Si el nombre no trae género, no tocamos ese campo.
           setSelectOrCustom("discipline_select", "discipline_custom", meta.discipline, window.syncCustomDiscipline);
           setSelectOrCustom("category_select", "category_custom", meta.category, window.syncCustomCategory);
           setSelectOrCustom("gender_select", "gender_custom", meta.gender, window.syncCustomGender);
