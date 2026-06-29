@@ -710,21 +710,40 @@
 
           // quitar extensión
           const base = filename.replace(/\.[^/.]+$/, "");
-          const partsRaw = base.split("_").filter(Boolean);
+          const partsRaw = base.split("_").map(p => p.trim()).filter(Boolean);
 
           if (partsRaw.length < 4) return null;
 
-          // detectar fecha al final (YYYY-MM-DD) si existe
           let parts = [...partsRaw];
+
+          // detectar fecha al final (YYYY-MM-DD) si existe
           const last = parts[parts.length - 1];
           if (/^\d{4}-\d{2}-\d{2}$/.test(last)) {
             parts.pop();
           }
 
-          // detectar sistema al final (si está) y removerlo (NO lo usamos para setear sistema)
-          const maybeSystem = parts[parts.length - 1];
-          if (/^(8x3|8x3_sembrado|4x6|6x4_sembrado|rr)$/i.test(maybeSystem || "")) {
-            parts.pop();
+          // detectar sistema al final y removerlo.
+          // Importante: algunos sistemas tienen "_" en el nombre (8x3_sembrado / 6x4_sembrado),
+          // por eso hay que mirar sufijos de 2 partes antes de separar disciplina/categoría/género/modalidad.
+          const systemSuffixes = [
+            ["8x3", "sembrado"],
+            ["6x4", "sembrado"],
+            ["8x3"],
+            ["4x6"],
+            ["rr"],
+          ];
+
+          for (const suffix of systemSuffixes) {
+            if (parts.length < suffix.length) continue;
+
+            const tail = parts.slice(parts.length - suffix.length).map(p => p.toLowerCase());
+            const normalizedSuffix = suffix.map(p => p.toLowerCase());
+            const matches = tail.every((p, idx) => p === normalizedSuffix[idx]);
+
+            if (matches) {
+              parts.splice(parts.length - suffix.length, suffix.length);
+              break;
+            }
           }
 
           if (parts.length < 4) return null;
@@ -3042,4 +3061,3 @@ const uploadBtn = document.getElementById("upload-btn");
 
   </body>
 </html>
-
