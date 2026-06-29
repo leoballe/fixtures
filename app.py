@@ -102,6 +102,148 @@ def import_teams():
 
     return jsonify({'teams': [t.__dict__ for t in loaded_teams]})
 
+# ---------------- LISTAS POR DEFECTO (CSV en la misma carpeta del proyecto/templates) ----------------
+
+LIST_CSV_FILES = {
+    'disciplinas': 'Disciplinas.csv',
+    'categorias': 'Categorias.csv',
+    'generos': 'genero.csv',
+    'modalidades': 'modalidad.csv',
+}
+
+
+def _read_simple_csv_items_from_path(path: str) -> list[str]:
+    """
+    Lee un CSV simple para completar desplegables.
+    Acepta archivos de una columna o varias columnas; toma el primer valor no vacío de cada fila.
+    Soporta UTF-8, Latin-1 y CP1252, y separadores coma, punto y coma o tabulación.
+    """
+    tried_encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']
+    last_exc = None
+
+    for enc in tried_encodings:
+        items: list[str] = []
+        seen: set[str] = set()
+        try:
+            with open(path, newline='', encoding=enc) as csvfile:
+                sample = csvfile.read(4096)
+                csvfile.seek(0)
+
+                try:
+                    dialect = csv.Sniffer().sniff(sample, delimiters=',;\t')
+                except Exception:
+                    dialect = csv.excel
+
+                reader = csv.reader(csvfile, dialect)
+                for row in reader:
+                    if not row:
+                        continue
+
+                    value = ''
+                    for cell in row:
+                        cell = (cell or '').strip().strip('"').strip("'")
+                        if cell:
+                            value = cell
+                            break
+
+                    if not value:
+                        continue
+
+                    # Si el CSV trae encabezado, no lo cargamos como opción.
+                    header_like = value.strip().lower()
+                    if not items and header_like in {
+                        'disciplina', 'disciplinas',
+                        'categoria', 'categoría', 'categorias', 'categorías',
+                        'genero', 'género', 'generos', 'géneros',
+                        'modalidad', 'modalidades',
+                        'nombre', 'item', 'valor', 'value'
+                    }:
+                        continue
+
+                    key = value.casefold()
+                    if key in seen:
+                        continue
+
+                    seen.add(key)
+                    items.append(value)
+
+            return items
+        except Exception as exc:
+            last_exc = exc
+
+    raise last_exc or RuntimeError(f'No se pudo leer el archivo {path}')
+
+
+def _candidate_csv_paths(filename: str) -> list[str]:
+    """
+    Busca el CSV tanto en la carpeta del index.html (templates) como junto a app.py.
+    Esto cubre los dos escenarios habituales del proyecto.
+    """
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    static_dir = os.path.abspath(app.static_folder)
+
+    candidates = [
+        os.path.join(static_dir, filename),
+        os.path.join(root_dir, filename),
+        os.path.join(root_dir, 'templates', filename),
+    ]
+
+    # Fallback case-insensitive para evitar problemas por mayúsculas/minúsculas en Linux/Replit.
+    for folder in [static_dir, root_dir, os.path.join(root_dir, 'templates')]:
+        try:
+            for existing in os.listdir(folder):
+                if existing.lower() == filename.lower():
+                    candidates.append(os.path.join(folder, existing))
+        except Exception:
+            pass
+
+    unique: list[str] = []
+    for p in candidates:
+        if p not in unique:
+            unique.append(p)
+    return unique
+
+
+def _find_existing_csv(filename: str) -> str | None:
+    for path in _candidate_csv_paths(filename):
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+@app.route('/competition_lists', methods=['GET'])
+def competition_lists():
+    """
+    Devuelve las listas iniciales para los desplegables del HTML.
+    Archivos esperados:
+      - Disciplinas.csv
+      - Categorias.csv
+      - genero.csv
+      - modalidad.csv
+    """
+    data = {
+        'disciplinas': [],
+        'categorias': [],
+        'generos': [],
+        'modalidades': [],
+        'missing_files': [],
+        'errors': {},
+    }
+
+    for key, filename in LIST_CSV_FILES.items():
+        path = _find_existing_csv(filename)
+        if not path:
+            data['missing_files'].append(filename)
+            continue
+
+        try:
+            data[key] = _read_simple_csv_items_from_path(path)
+        except Exception as exc:
+            data['errors'][filename] = str(exc)
+            data[key] = []
+
+    return jsonify(data)
+
 # ---------------- IMPORTAR LISTAS (disciplina, categoría, género, modalidad) ----------------
 
 @app.route('/import_list/<kind>', methods=['POST'])
@@ -121,34 +263,8 @@ def import_list(kind: str):
     tmp_path = os.path.join('/tmp', file.filename or f'{kind}.csv')
     file.save(tmp_path)
 
-    items: list[str] = []
     try:
-        # Intentamos primero utf-8, si falla probamos latin-1 (típico de Windows/Excel)
-        tried_encodings = ['utf-8', 'latin-1', 'cp1252']
-        last_exc = None
-
-        for enc in tried_encodings:
-            try:
-                with open(tmp_path, newline='', encoding=enc) as csvfile:
-                    reader = csv.reader(csvfile)
-                    for row in reader:
-                        if not row:
-                            continue
-                        value = row[0].strip()
-                        if not value:
-                            continue
-                        items.append(value)
-                # Si llegamos acá, esta encoding funcionó → rompemos el for
-                last_exc = None
-                break
-            except Exception as exc:
-                items = []  # vaciamos por si se mezcló algo
-                last_exc = exc
-
-        if last_exc is not None:
-            # Ninguna codificación funcionó
-            raise last_exc
-
+        items = _read_simple_csv_items_from_path(tmp_path)
     except Exception as exc:
         return jsonify({'error': f'Error al leer CSV de {kind}: {exc}'}), 400
     finally:
