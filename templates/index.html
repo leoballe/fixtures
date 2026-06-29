@@ -1,1 +1,3045 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Generador de Fixtures 2 </title>
+    <style>
+      /* Estilos básicos */
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #fdfdfd;
+        color: #332;
+      }
+
+      h1 {
+        margin: 0;
+        padding: 20px;
+        background-color: #004080;
+        color: #fff;
+        text-align: center;
+      }
+
+      .config {
+        background-color: #eef2fa;
+        padding: 10px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        border-bottom: 1px solid #ccd6eb;
+      }
+
+      .form-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+
+      label {
+        font-weight: bold;
+      }
+
+      .container {
+        display: flex;
+        flex-direction: row;
+        gap: 20px;
+        padding: 20px;
+      }
+
+      .match-list {
+        flex: 0 0 28%;
+        max-height: 75vh;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        padding: 10px;
+        background-color: #fafafa;
+      }
+
+      .match-panels {
+        display: flex;
+        gap: 10px;
+      }
+
+      .match-panel {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .match-panel h3 {
+        margin: 6px 0 8px 0;
+        font-size: 14px;
+      }
+
+      #match-list-regular, 
+      #match-list-final {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+
+      .schedule-container {
+        flex: 1;
+        overflow-x: auto;
+        overflow-y: auto; /* que también tenga scroll vertical propio */
+        max-height: 60vh; /* ocupa como mucho el 75% de la altura de pantalla */
+        border: 1px solid #ccc;
+        padding: 10px;
+        background-color: #fafafa;
+      }
+
+      .match-list h2,
+      .schedule-container h2 {
+        margin-top: 0;
+      }
+
+      .match-card {
+        background-color: #eaeaea;
+        border: 1px solid #aaa;
+        border-radius: 4px;
+        padding: 6px;
+        height: 10px;
+        margin-bottom: 6px;
+        cursor: grab;
+        user-select: none;
+        font-size: 0.6rem;
+      }
+
+      .match-card:active {
+        cursor: grabbing;
+      }
+
+      .placeholder {
+        color: #666;
+        font-style: italic;
+      }
+
+      table.schedule-day {
+        border-collapse: collapse;
+        margin-bottom: 30px;
+        width: 100%;
+        table-layout: fixed;
+        font-size: 0.7rem;
+      }
+
+      table.schedule-day caption {
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+
+      table.schedule-day th,
+      table.schedule-day td {
+        border: 1px solid #999;
+        padding: 4px;
+        text-align: center;
+        width: 100px;
+        height: 20px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      table.schedule-day th {
+        background-color: #dde6f7;
+      }
+
+      td.timeslot {
+        background-color: #f9f9f9;
+        cursor: pointer;
+      }
+
+      td.timeslot.filled {
+        color: #003300;
+        font-weight: bold;
+      }
+
+      /* Número de slot en la esquina superior izquierda */
+      td.timeslot .slot-number {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        font-size: 0.7em;
+        color: #444;
+      }
+
+      /* Botón para quitar un partido de un slot */
+      .remove-btn {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        background: transparent;
+        border: none;
+        color: #900;
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 0.8em;
+        padding: 0;
+        line-height: 1;
+      }
+
+      .remove-btn:hover {
+        color: #c00;
+      }
+
+      /* =============================
+         UI moderna: panel de disponibilidad
+         (no cambia IDs ni lógica)
+         ============================= */
+      #availabilityPanel {
+        border: 1px solid #ccd6eb !important;
+        background: #ffffff !important;
+        border-radius: 12px;
+        padding: 14px 14px 10px !important;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+      }
+      #availabilityPanel strong {
+        display: block;
+        font-size: 0.95rem;
+        margin-bottom: 8px;
+        color: #0b2a57;
+      }
+      .avail-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 6px;
+      }
+      .btn {
+        appearance: none;
+        border: 1px solid #c7d3ea;
+        background: #f6f9ff;
+        color: #0b2a57;
+        padding: 6px 10px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.85rem;
+      }
+      .btn:hover { background: #eef4ff; }
+      .btn:active { transform: translateY(1px); }
+      .btn-danger {
+        background: #fff5f5;
+        border-color: #f2b8b8;
+        color: #7a1c1c;
+      }
+      .btn-danger:hover { background: #ffeaea; }
+      .avail-select {
+        border: 1px solid #c7d3ea;
+        padding: 6px 10px;
+        border-radius: 10px;
+        background: #fff;
+        font-size: 0.9rem;
+      }
+      .court-card {
+        border: 1px solid #e5ecf7;
+        border-radius: 12px;
+        padding: 12px;
+        background: #fbfcff;
+      }
+      .court-card.highlight {
+        outline: 3px solid #004080;
+        box-shadow: 0 0 0 4px rgba(0,64,128,0.15);
+      }
+
+      .court-card.disabled { opacity: 0.6; }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #c7d3ea;
+        background: #fff;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.85rem;
+      }
+      .windows {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .window-line {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 8px;
+        border-radius: 10px;
+        background: #ffffff;
+        border: 1px solid #e5ecf7;
+      }
+      .window-line input[type="time"]{
+        border: 1px solid #c7d3ea;
+        padding: 6px 10px;
+        border-radius: 10px;
+        font-size: 0.9rem;
+      }
+      .hint { font-size: 0.8rem; color: #5a6a85; }
+      .hint.error { color: #7a1c1c; font-weight: 700; }
+
+      /* Duración por día */
+      .day-duration-container{
+        display:flex;
+        flex-wrap:wrap;
+        gap:10px;
+        align-items:center;
+      }
+      .day-duration-item{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        border:1px solid #c7d3ea;
+        background:#fff;
+        padding:6px 10px;
+        border-radius:999px;
+        font-size:0.85rem;
+      }
+      .day-duration-item input[type="number"]{
+        width:70px;
+        padding:6px 10px;
+        border-radius:10px;
+        border:1px solid #c7d3ea;
+        font-size:0.9rem;
+      }
+      .bye-area {
+        border: 1px dashed #bbb;
+        padding: 8px;
+        margin: 6px 0 18px 0;
+        background: #fff;
+      }
+
+      .bye-title {
+        font-weight: bold;
+        font-size: 12px;
+        margin-bottom: 6px;
+      }
+
+      .bye-dropzone {
+        min-height: 44px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      <style>
+      .bracket-container {
+          display: flex;
+          gap: 40px;
+          padding: 20px;
+          background: #f9f9f9;
+          overflow-x: auto;
+      }
+      .bracket-column {
+          display: flex;
+          flex-direction: column;
+          justify-content: space-around;
+      }
+      .match-box {
+          border: 1px solid #004080;
+          padding: 10px;
+          margin: 10px 0;
+          background: white;
+          min-width: 150px;
+          border-radius: 4px;
+          box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+      }
+      .match-box span { display: block; font-size: 12px; }
+      .match-box b { color: #004080; }
+      </style>
+    </style>
+  </head>
+  <body>
+    <h1>GENERADOR DE FIXTURES - JUEGOS NACIONALES</h1>
+
+    <section id="config" class="config">
+      <fieldset class="form-row-group">
+        <legend>Datos de la competencia</legend>
+
+        <div class="form-row">
+          <label>Disciplina:</label>
+          <input type="file" id="disciplines_file" accept=".csv" style="display: none;">
+          <button type="button" id="load-discipline" class="btn">Cargar CSV Disciplinas</button>
+          <select id="discipline_select">
+            <option value="">(Elegir de la lista)</option>
+          </select>
+          <input
+            type="text"
+            id="discipline_custom"
+            placeholder="O escribir a mano"
+            oninput="syncCustomDiscipline()"
+          >
+        </div>
+
+        <div class="form-row">
+          <label>Categoría:</label>
+          <input type="file" id="categories_file" accept=".csv" style="display: none;">
+          <button type="button" id="load-category" class="btn">Cargar CSV Categorías</button>
+          <select id="category_select">
+            <option value="">(Elegir de la lista)</option>
+          </select>
+          <input
+            type="text"
+            id="category_custom"
+            placeholder="O escribir a mano"
+            oninput="syncCustomCategory()"
+          >
+        </div>
+
+        <div class="form-row">
+          <label>Género:</label>
+          <input type="file" id="gender_file" accept=".csv" style="display: none;">
+          <button type="button" id="load-gender" class="btn">Cargar CSV Géneros</button>
+          <select id="gender_select">
+            <option value="">(Elegir de la lista)</option>
+          </select>
+          <input
+            type="text"
+            id="gender_custom"
+            placeholder="O escribir a mano"
+            oninput="syncCustomGender()"
+          >
+        </div>
+
+        <div class="form-row">
+          <label>Modalidad:</label>
+          <input type="file" id="modalities_file" accept=".csv" style="display: none;">
+          <button type="button" id="load-modality" class="btn">Cargar CSV Modalidad</button>
+          <select id="modality_select">
+            <option value="">(Elegir de la lista)</option>
+          </select>
+          <input
+            type="text"
+            id="modality_custom"
+            placeholder="O escribir a mano"
+            oninput="syncCustomModality()"
+          >
+        </div>
+
+       </fieldset>
+
+      <div class="form-row">
+        <label>Equipos:</label>
+
+        <!-- input oculto -->
+        <input type="file" id="teams_file" accept=".csv" style="display:none" />
+
+        <!-- botón único -->
+        <button type="button" id="upload-btn" class="btn">
+          📄 Cargar CSV de equipos
+        </button>
+
+        <span id="teams-file-name" class="hint"></span>
+      </div>
+
+      <div class="form-row">
+        <label for="system">Sistema:</label>
+        <select id="system">
+          <option value="8x3">8x3</option>
+          <option value="8x3_sembrado">8x3 Sembrado</option>
+          <option value="4x6">4x6</option>
+          <option value="6x4_sembrado">6x4 Sembrado</option>
+          <option value="rr">Round Robin</option>
+        </select>
+        <label for="home_and_away">
+          <input type="checkbox" id="home_and_away" />
+          Ida y vuelta
+        </label>
+      </div>
+      <div class="form-row">
+        <label for="days">Días:</label>
+        <input type="number" id="days" value="5" min="1" />
+        <label for="fields">Canchas:</label>
+        <input type="number" id="fields" value="2" min="1" />
+        <label for="match_duration">Duración (min):</label>
+        <input type="number" id="match_duration" value="60" min="1" />
+        <label for="rest_minutes">Descanso mín. (min):</label>
+        <input type="number" id="rest_minutes" min="0" placeholder="(vacío = igual a duración)" />
+
+      </div>
+
+      <div class="form-row" id="day-duration-row">
+        <label>Duración por día (opcional):</label>
+        <div id="dayDurationContainer" class="day-duration-container"></div>
+        <span class="hint">Si dejás un día vacío, usa la duración general.</span>
+      </div>
+
+      <div class="form-row">
+        <label for="start_time">Inicio:</label>
+        <input type="time" id="start_time" value="09:00" />
+        <label for="end_time">Fin:</label>
+        <input type="time" id="end_time" value="18:00" />
+        <label>Corte de mediodía (opcional)</label>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <span>Desde</span>
+          <input type="time" id="midday_break_from" />
+          <span>Hasta</span>
+          <input type="time" id="midday_break_to" />
+        </div>        <input type="text" id="midday_break" placeholder="12:00,14:00" />
+      </div>
+
+
+
+      <!-- PANEL DISPONIBILIDAD -->
+      <div id="availabilityPanel">
+        <strong>Disponibilidad por día y cancha</strong>
+
+        <div class="avail-toolbar">
+          Día:
+          <select id="availDaySelect" class="avail-select"></select>
+
+          <button type="button" id="btnCopyAvailToAllDays" class="btn">Copiar este día a todos</button>
+          <button type="button" id="btnClearAvailOverrides" class="btn btn-danger">Usar horario general</button>
+        </div>
+
+        <div id="availCourtsContainer" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="form-row">
+        <button id="generate-btn">Generar horarios y partidos</button>
+          <!-- NUEVO: auto-ubicar -->
+          <button type="button" id="auto-place-btn" class="btn">
+            📌 Auto-ubicar según PDF
+          </button>
+        <label style="margin-left:12px; display:inline-flex; align-items:center; gap:6px; user-select:none;">
+          <input type="checkbox" id="allow_compaction" />
+          Permitir compactación automática si no entran
+        </label>
+      </div>
+    </section>
+
+      <div class="container">
+        <div id="match-list" class="match-list">
+          <h2>Partidos</h2>
+
+          <div class="match-panels">
+            <div class="match-panel">
+              <h3>Fase regular</h3>
+              <div id="match-list-regular"></div>
+            </div>
+
+            <div class="match-panel">
+              <h3>Fase final</h3>
+              <div id="match-list-final"></div>
+            </div>
+          </div>
+
+          <p id="match-list-placeholder" class="placeholder">
+            Importe equipos y genere para ver los partidos.
+          </p>
+        </div>
+
+        <!-- ✅ ESTE CONTENEDOR FALTABA: el JS lo necesita para renderSchedule() -->
+        <div id="schedule-container" class="schedule-container">
+          <h2>Horarios</h2>
+          <p class="placeholder">Genere horarios para ver las tablas.</p>
+        </div>
+      </div>
+
+    <div style="padding: 0 20px 20px 20px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button id="export-pdf-btn" class="btn" type="button">Exportar fixture en PDF</button>
+      <button id="export-excel-btn" class="btn" type="button">Exportar a Excel</button>
+    </div>
+
+      <script>
+
+
+      // helpers de tiempo (OBLIGATORIOS)
+      function hhmmToMin(hhmm) {
+        const [h, m] = hhmm.split(":").map(Number);
+        return h * 60 + m;
+      }
+
+      function minToHHMM(min) {
+        const h = Math.floor(min / 60).toString().padStart(2, "0");
+        const m = (min % 60).toString().padStart(2, "0");
+        return `${h}:${m}`;
+      }
+
+      // =============================
+      // Helper: mostrar nombre de equipo sin "Zona;" delante
+      // Regla: si el nombre contiene ';', usar SOLO lo que está después del ';'
+      // Ej: "A;1" -> "1", "H;Equipo 7" -> "Equipo 7"
+      // =============================
+      function displayTeamName(raw) {
+        const s = (raw ?? "").toString();
+        const parts = s.split(";");
+        if (parts.length >= 2) return parts[parts.length - 1].trim();
+        return s.trim();
+      }
+
+      // Para mostrar un partido (solo visual). NO cambia los datos internos.
+      function displayMatchText(homeRaw, awayRaw) {
+        return `${displayTeamName(homeRaw)} vs ${displayTeamName(awayRaw)}`;
+      }
+      // HTML único para tarjetas (iniciales y restauradas)
+        function isRegularZone(zone) {
+          return typeof zone === "string" && /^([A-H]|[1-4])$/.test(zone.trim());
+        }
+
+      function shouldShowRound(zone) {
+        if (!zone) return false;
+        const z = String(zone).trim().toUpperCase();
+        // Regular: A..H
+        if (/^([A-H]|[1-4])$/.test(z)) return true;
+        // Final: solo ZA1 / ZA2 (aceptamos también A1/A2 por si alguna vez cambia el backend)
+        if (z === "ZA1" || z === "ZA2" || z === "A1" || z === "A2") return true;
+        return false;
+      }
+
+        function getDisplayedRound(zone, matchNumber, backendRound) {
+          const z = String(zone || "").trim().toUpperCase();
+
+          // Solo ajustamos ZA1/ZA2 (o A1/A2 por compatibilidad)
+          if (z === "ZA1" || z === "ZA2" || z === "A1" || z === "A2") {
+            const n = parseInt(matchNumber || "0", 10);
+
+            // Ronda 1: 25-28
+            if ([25, 26, 27, 28].includes(n)) return 1;
+
+            // Ronda 2: 37-40
+            if ([37, 38, 39, 40].includes(n)) return 2;
+
+            // Ronda 3: 49-52
+            if ([49, 50, 51, 52].includes(n)) return 3;
+          }
+
+          // Por defecto: usar el round que viene del backend
+          return parseInt(backendRound || "1", 10);
+        }
+
+        // ✅ ÚNICA función BYE (acepta: isByeMatch(matchObj) o isByeMatch(home, away))
+        function isByeMatch(arg1, arg2, arg3) {
+          // Soporta 2 usos:
+          // - isByeMatch(matchObject)
+          // - isByeMatch(home, away, zone)
+          let h = "";
+          let a = "";
+          let z = "";
+
+          if (arg1 && typeof arg1 === "object") {
+            h = String(arg1.home ?? "").trim();
+            a = String(arg1.away ?? "").trim();
+            z = String(arg1.zone ?? "").trim().toUpperCase();
+          } else {
+            h = String(arg1 ?? "").trim();
+            a = String(arg2 ?? "").trim();
+            z = String(arg3 ?? "").trim().toUpperCase();
+          }
+
+          // “Informativos” (compatibilidad histórica)
+          const infoVal = (a || h).trim(); // por si viene en home o en away
+          if (z === "23º" && infoVal === "PP41") return true;
+          if (z === "21º" && infoVal === "PP30") return true;
+          if (z === "15º" && infoVal === "PP42") return true;
+          if (z === "23º" && infoVal === "PP61") return true;
+          if (z === "19º" && infoVal === "PP63") return true;
+          if (z === "18º" && infoVal === "PP68") return true;
+
+          // ✅ Regla general (OBLIGATORIA):
+          // Si falta home o falta away, NO es un partido real -> tratarlo como BYE / informativo
+          if (!h || !a) return true;
+
+          // BYE literal
+          // ✅ Regla general: si falta un equipo (home o away vacío), es "informativo" => tratar como BYE
+          if (!h || !a) return true;
+
+          // ✅ Caso especial: 23 equipos (si aplica): "23º … PP41" se trata como BYE
+          if (z === "23º" && a === "PP41" && (h === "" || h === "BYE")) return true;
+
+          // ✅ Regla general también para el modo (home, away)
+          if (!h || !a) return true;
+          return h === "BYE" || a === "BYE";
+
+
+        }
+
+
+
+
+
+      // HTML único para tarjetas (iniciales y restauradas)
+      function matchCardHTML(home, away, zone, round) {
+        const z = (zone ?? "").toString().trim();
+        const h = (home ?? "").toString().trim();
+        const a = (away ?? "").toString().trim();
+
+        // ✅ Partido especial (23 equipos - 8x3 Sembrado): Nº53 debe verse como "23º … PP41"
+        if (z === "23º" && a.toUpperCase() === "PP41" && (h === "" || h.toUpperCase() === "BYE")) {
+          return `<strong>23º … PP41</strong>`;
+        }
+        // ✅ Partido especial (21 equipos - 8x3 Sembrado): Nº41 debe verse como "21º … PP30"
+        if (z === "21º" && a.toUpperCase() === "PP30" && (h === "" || h.toUpperCase() === "BYE")) {
+          return `<strong>21º … PP30</strong>`;
+        }
+        // ✅ Partido especial (15 equipos - 8x3 Sembrado): Nº53 debe verse como "15º … PP42"
+        if (z === "15º" && a.toUpperCase() === "PP42" && (h === "" || h.toUpperCase() === "BYE")) {
+          return `<strong>15º … PP42</strong>`;
+        }
+        // ✅ Regla general: "partido informativo" (solo 1 dato visible)
+        // Ej: "21º … 6to. Z1" (4x6 – 21 equipos) / "23º … PP61" (4x6 – 23 equipos)
+        // Si el partido es "informativo" (solo 1 dato visible y zona tipo "23º")
+        // ✅ ahora funciona si el dato viene en home O en away
+        if (String(z).includes("º") && ((h !== "" && a === "") || (h === "" && a !== ""))) {
+          const val = h || a;
+          return `<strong>${z} … ${val}</strong>`;
+        }
+
+        const roundPart = shouldShowRound(z) ? ` - Ronda ${round}` : "";
+        return `<strong>${displayMatchText(home, away)} – Zona ${z}${roundPart}</strong>`;
+      }
+
+
+// === DISPONIBILIDAD POR DÍA Y CANCHA (EDITABLE DESDE LA UI) ===
+      let courtAvailabilityByDay = {};
+
+// El backend está en el mismo host
+      const BASE_URL = "";
+
+        // =========================================================
+        // Autocompletar Disciplina/Categoría/Género/Modalidad desde
+        // el nombre del CSV de equipos.
+        // Formato esperado (ej):
+        //   BADMINTON_S15_Femenino_COMUNITARIO_8x3_2026-01-09.csv
+        // -> disciplina, categoria, genero, modalidad
+        // Nota: si la disciplina trae "_" en el nombre, se conserva.
+        // =========================================================
+        function parseMetaFromTeamsFilename(filename) {
+          if (!filename) return null;
+
+          // quitar extensión
+          const base = filename.replace(/\.[^/.]+$/, "");
+          const partsRaw = base.split("_").filter(Boolean);
+
+          if (partsRaw.length < 4) return null;
+
+          // detectar fecha al final (YYYY-MM-DD) si existe
+          let parts = [...partsRaw];
+          const last = parts[parts.length - 1];
+          if (/^\d{4}-\d{2}-\d{2}$/.test(last)) {
+            parts.pop();
+          }
+
+          // detectar sistema al final (si está) y removerlo (NO lo usamos para setear sistema)
+          const maybeSystem = parts[parts.length - 1];
+          if (/^(8x3|8x3_sembrado|4x6|6x4_sembrado|rr)$/i.test(maybeSystem || "")) {
+            parts.pop();
+          }
+
+          if (parts.length < 4) return null;
+
+          const modality = parts.pop();
+          const gender = parts.pop();
+          const category = parts.pop();
+          const discipline = parts.join("_");
+
+          return { discipline, category, gender, modality };
+        }
+
+        function _removePreviousCustomOption(selectElem) {
+          Array.from(selectElem.options).forEach((opt) => {
+            if (opt.dataset && opt.dataset.custom === "true") opt.remove();
+          });
+        }
+
+        function setSelectOrCustom(selectId, customId, value, syncFn) {
+          const selectElem = document.getElementById(selectId);
+          const customInput = document.getElementById(customId);
+          if (!selectElem || !customInput) return;
+
+          const v = (value || "").trim();
+          if (!v) return;
+
+          // Si existe en el select, elegirlo
+          let foundValue = null;
+          for (const opt of Array.from(selectElem.options)) {
+            if (((opt.value || "").trim().toLowerCase()) === v.toLowerCase()) {
+              foundValue = opt.value;
+              break;
+            }
+          }
+
+          if (foundValue !== null) {
+            _removePreviousCustomOption(selectElem);
+            selectElem.value = foundValue;
+            customInput.value = "";
+          } else {
+            // Si no existe en lista (o todavía no cargaste listas), usar "escribir a mano"
+            customInput.value = v;
+            if (typeof syncFn === "function") syncFn();
+          }
+        }
+
+        function applyMetaFromTeamsFilename(filename) {
+          const meta = parseMetaFromTeamsFilename(filename);
+          if (!meta) return;
+
+          // Importante: esto NO bloquea nada; luego podés cambiar manualmente como siempre
+          setSelectOrCustom("discipline_select", "discipline_custom", meta.discipline, window.syncCustomDiscipline);
+          setSelectOrCustom("category_select", "category_custom", meta.category, window.syncCustomCategory);
+          setSelectOrCustom("gender_select", "gender_custom", meta.gender, window.syncCustomGender);
+          setSelectOrCustom("modality_select", "modality_custom", meta.modality, window.syncCustomModality);
+        }
+
+      // Paleta de colores por zona
+        const zoneColors = {
+          A: "#ffd966", // amarillo
+          B: "#9fc5e8", // azul claro
+          C: "#f4b084", // naranja
+          D: "#a2c4c9", // azul grisáceo
+          E: "#b7b7b7", // gris
+          F: "#8e7cc3", // violeta
+          G: "#93c47d", // verde
+          H: "#c27ba0", // rosa
+
+          // 4x6 (zonas numéricas)
+          "1": "#ffd966",
+          "2": "#9fc5e8",
+          "3": "#f4b084",
+          "4": "#a2c4c9",
+        }
+
+        function getZoneColor(zone) {
+          const z = (zone || "").trim();
+          if (zoneColors[z]) return zoneColors[z];
+
+          const up = z.toUpperCase();
+          // Zonas numéricas (4x6): 1..4
+          if (z === "1") return zoneColors["A"];
+          if (z === "2") return zoneColors["B"];
+          if (z === "3") return zoneColors["C"];
+          if (z === "4") return zoneColors["D"];
+          // Zonas de fase final
+          if (up === "ZA1") return "#ffe599";   // amarillo claro
+          if (up === "ZA2") return "#b6d7a8";   // verde claro
+
+          // Llaves
+          if (up.startsWith("LLAVE B")) return "#a4c2f4"; // azul
+          if (up.startsWith("LLAVE C")) return "#f9cb9c"; // naranja claro
+
+          // Puestos (1º-2º, 21º-22º, etc.)
+          if (up.includes("º")) return "#d9d9d9"; // gris
+
+          return "#dddddd";
+        }
+
+
+      // =============================
+      // Atajos desde el encabezado de cada cancha (en el calendario)
+      // - "Horarios": te lleva a Inicio/Fin/Pausa
+      // - "Disponibilidad": abre el panel y resalta la cancha
+      // =============================
+      function scrollToTimeControls() {
+        const el = document.getElementById("start_time") || document.getElementById("config");
+        if (el && typeof el.scrollIntoView === "function") {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }
+
+      function openAvailabilityFor(dayNumber1Based, courtNumber) {
+        const panel = document.getElementById("availabilityPanel");
+        const daySel = document.getElementById("availDaySelect");
+        const wrap = document.getElementById("availCourtsContainer");
+        if (!panel || !daySel || !wrap) return;
+
+        // el selector usa dayIndex 0-based
+        const dayIndex = Math.max(0, (parseInt(dayNumber1Based, 10) || 1) - 1);
+        daySel.value = String(dayIndex);
+        daySel.dispatchEvent(new Event("change"));
+
+        panel.scrollIntoView({ behavior: "smooth", block: "start" });
+
+        // resaltar cancha en el panel (si existe)
+        setTimeout(() => {
+          const card = wrap.querySelector(`.court-card[data-court="${String(courtNumber)}"]`);
+          if (!card) return;
+          card.classList.add("highlight");
+          setTimeout(() => card.classList.remove("highlight"), 1400);
+        }, 120);
+      }
+
+const uploadBtn = document.getElementById("upload-btn");
+      const generateBtn = document.getElementById("generate-btn");
+      const teamsFileInput = document.getElementById("teams_file");
+      const matchListDiv = document.getElementById("match-list");
+      const scheduleContainer = document.getElementById("schedule-container");
+      const exportBtn = document.getElementById("export-pdf-btn");
+      const exportExcelBtn = document.getElementById("export-excel-btn");
+      const autoPlaceBtn = document.getElementById("auto-place-btn");
+
+
+      let teamsLoaded = false;
+      let draggedCard = null; // partido arrastrado desde la lista
+      let draggedCell = null; // celda arrastrada desde el tablero
+        // NUEVO: guardamos los matches que devuelve el backend (con día/cancha del PDF)
+        let lastGeneratedMatches = [];
+
+      // =============================
+      // Duración por día (override opcional)
+      // - Si un día tiene valor (>0), prevalece sobre la duración general
+      // - Si está vacío, usa la duración general
+      // =============================
+      const matchDurationByDay = {}; // clave: dayIndex (0-based) -> minutos (number)
+
+      function getMatchDurationForDay(dayIndex, fallbackMinutes) {
+        const v = matchDurationByDay[dayIndex];
+        const n = parseInt(v, 10);
+        if (!isNaN(n) && n > 0) return n;
+        return fallbackMinutes;
+      }
+
+        // =============================
+        // Descanso mínimo (general + por día override opcional)
+        // - Si un día tiene valor (>=0), prevalece sobre el descanso general
+        // - Si está vacío, usa el descanso general (si existe)
+        // - Si ambos están vacíos, fallback = duración del partido (comportamiento anterior)
+        // =============================
+        const matchRestByDay = {}; // clave: dayIndex (0-based) -> minutos (number)
+
+        function getRestMinutesForDay(dayIndex, fallbackMinutes) {
+          // 1) Override por día
+          const vDay = matchRestByDay[dayIndex];
+          const nDay = parseInt(vDay, 10);
+          if (!isNaN(nDay) && nDay >= 0) return nDay; // permite 0
+
+          // 2) General
+          const generalEl = document.getElementById("rest_minutes");
+          const rawGen = generalEl ? String(generalEl.value || "").trim() : "";
+          const nGen = parseInt(rawGen, 10);
+          if (!isNaN(nGen) && nGen >= 0) return nGen;
+
+          // 3) Fallback (igual a duración)
+          const fb = parseInt(fallbackMinutes, 10);
+          return isNaN(fb) ? 0 : fb;
+        }
+
+        function renderDayDurationInputs() {
+          const daysEl = document.getElementById("days");
+          const container = document.getElementById("dayDurationContainer");
+          const generalEl = document.getElementById("match_duration");
+          const restGeneralEl = document.getElementById("rest_minutes");
+          if (!daysEl || !container || !generalEl) return;
+
+          const days = parseInt(daysEl.value || "1", 10);
+          const general = parseInt(generalEl.value || "60", 10);
+
+          const rawGenRest = restGeneralEl ? String(restGeneralEl.value || "").trim() : "";
+          const generalRest = parseInt(rawGenRest, 10);
+          const hasGeneralRest = !isNaN(generalRest) && generalRest >= 0;
+
+          container.innerHTML = "";
+
+          for (let d = 0; d < days; d++) {
+            const item = document.createElement("div");
+            item.className = "day-duration-item";
+
+            const label = document.createElement("span");
+            label.textContent = `Día ${d + 1}:`;
+
+            // ---------- DURACIÓN ----------
+            const durTag = document.createElement("span");
+            durTag.textContent = "Dur";
+
+            const durInput = document.createElement("input");
+            durInput.type = "number";
+            durInput.min = "1";
+            durInput.placeholder = String(general);
+            durInput.value = matchDurationByDay[d] ? String(matchDurationByDay[d]) : "";
+
+            // ---------- DESCANSO ----------
+            const restTag = document.createElement("span");
+            restTag.textContent = "Desc";
+
+            const restInput = document.createElement("input");
+            restInput.type = "number";
+            restInput.min = "0";
+
+            // placeholder del descanso:
+            // si hay descanso general -> usa ese; si no -> usa la duración efectiva del día
+            const durFallbackForDay = getMatchDurationForDay(d, general);
+            restInput.placeholder = String(hasGeneralRest ? generalRest : durFallbackForDay);
+            restInput.value = (matchRestByDay[d] !== undefined && matchRestByDay[d] !== null && String(matchRestByDay[d]).trim() !== "")
+              ? String(matchRestByDay[d])
+              : "";
+
+            durInput.addEventListener("change", () => {
+              const raw = String(durInput.value || "").trim();
+              if (!raw) {
+                delete matchDurationByDay[d];
+                durInput.placeholder = String(parseInt(document.getElementById("match_duration").value || "60", 10));
+
+                // si NO hay descanso general y NO hay descanso por día, el placeholder del descanso sigue a la duración
+                const genNow = parseInt(document.getElementById("match_duration").value || "60", 10);
+                const rawGenRestNow = restGeneralEl ? String(restGeneralEl.value || "").trim() : "";
+                const genRestNow = parseInt(rawGenRestNow, 10);
+                const hasGenRestNow = !isNaN(genRestNow) && genRestNow >= 0;
+                if (!hasGenRestNow && !(matchRestByDay[d] >= 0)) {
+                  restInput.placeholder = String(getMatchDurationForDay(d, genNow));
+                }
+                return;
+              }
+              const n = parseInt(raw, 10);
+              if (isNaN(n) || n <= 0) {
+                alert("La duración por día debe ser un número mayor a 0.");
+                durInput.value = "";
+                delete matchDurationByDay[d];
+                return;
+              }
+              matchDurationByDay[d] = n;
+
+              // si NO hay descanso general y NO hay descanso por día, el placeholder del descanso sigue a la duración del día
+              const rawGenRestNow = restGeneralEl ? String(restGeneralEl.value || "").trim() : "";
+              const genRestNow = parseInt(rawGenRestNow, 10);
+              const hasGenRestNow = !isNaN(genRestNow) && genRestNow >= 0;
+              if (!hasGenRestNow && !(matchRestByDay[d] >= 0)) {
+                restInput.placeholder = String(getMatchDurationForDay(d, general));
+              }
+            });
+
+            restInput.addEventListener("change", () => {
+              const raw = String(restInput.value || "").trim();
+              if (!raw) {
+                delete matchRestByDay[d];
+
+                // si no hay descanso general, el placeholder vuelve a la duración del día
+                const rawGenRestNow = restGeneralEl ? String(restGeneralEl.value || "").trim() : "";
+                const genRestNow = parseInt(rawGenRestNow, 10);
+                const hasGenRestNow = !isNaN(genRestNow) && genRestNow >= 0;
+                restInput.placeholder = String(hasGenRestNow ? genRestNow : getMatchDurationForDay(d, general));
+                return;
+              }
+              const n = parseInt(raw, 10);
+              if (isNaN(n) || n < 0) {
+                alert("El descanso por día debe ser un número mayor o igual a 0.");
+                restInput.value = "";
+                delete matchRestByDay[d];
+                return;
+              }
+              matchRestByDay[d] = n;
+            });
+
+            item.appendChild(label);
+            item.appendChild(durTag);
+            item.appendChild(durInput);
+            item.appendChild(restTag);
+            item.appendChild(restInput);
+            container.appendChild(item);
+          }
+        }
+
+
+      // =============================
+      // EQUIPOS: 1 click (abrir selector + subir al elegir)
+      // =============================
+      uploadBtn.addEventListener("click", () => {
+        teamsFileInput.click();
+      });
+
+      teamsFileInput.addEventListener("change", async () => {
+        const file = teamsFileInput.files[0];
+        if (!file) return;
+
+        // feedback visual
+        const nameSpan = document.getElementById("teams-file-name");
+        if (nameSpan) nameSpan.textContent = file.name;
+
+        // Autocompletar Disciplina/Categoría/Género/Modalidad usando el nombre del archivo
+        applyMetaFromTeamsFilename(file.name);
+
+        const formData = new FormData();
+        formData.append("file", file, file.name);
+
+        try {
+          const res = await fetch(`${BASE_URL}/import_teams`, {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await res.json().catch(() => ({}));
+
+          if (!res.ok) {
+            alert(data.error || "Error al cargar equipos");
+            return;
+          }
+
+          teamsLoaded = true;
+
+          // ✅ NO tocar matchListDiv.innerHTML porque rompe los paneles (regular/final)
+          // Solo limpiamos los contenedores y mostramos el placeholder.
+          const regularDiv = document.getElementById("match-list-regular");
+          const finalDiv = document.getElementById("match-list-final");
+          const placeholder = document.getElementById("match-list-placeholder");
+
+          if (regularDiv) regularDiv.innerHTML = "";
+          if (finalDiv) finalDiv.innerHTML = "";
+          if (placeholder) {
+            placeholder.textContent = "Genere horarios para ver los partidos.";
+            placeholder.style.display = "block";
+          }
+
+
+          alert(`Se cargaron ${data.teams.length} equipos.`);
+        } catch (err) {
+          console.error(err);
+          alert("Error de red al cargar equipos");
+        }
+      });
+
+
+
+
+      // Generar horarios y lista de partidos
+      generateBtn.addEventListener("click", async () => {
+        if (!teamsLoaded) {
+          alert("Primero cargue un archivo CSV de equipos.");
+          return;
+        }
+        const system = document.getElementById("system").value;
+        const homeAndAway = document.getElementById("home_and_away").checked;
+        const days = parseInt(document.getElementById("days").value, 10);
+        const fields = parseInt(document.getElementById("fields").value, 10);
+        const matchDuration = parseInt(
+          document.getElementById("match_duration").value,
+          10,
+        );
+        const startTime = document.getElementById("start_time").value;
+        const endTime = document.getElementById("end_time").value;
+        // Corte general de medio día: 2 campos (Desde / Hasta)
+        const mbFromEl = document.getElementById("midday_break_from");
+        const mbToEl = document.getElementById("midday_break_to");
+
+        // Compatibilidad por si existiera el campo viejo "midday_break"
+        const legacyMbEl = document.getElementById("midday_break");
+
+        const mbFrom = (mbFromEl?.value || "").trim();
+        const mbTo = (mbToEl?.value || "").trim();
+
+        let middayBreak = null;
+
+        // Nuevo formato (Desde/Hasta)
+        if (mbFrom && mbTo) {
+          middayBreak = [mbFrom, mbTo];
+        } else if (legacyMbEl && legacyMbEl.value && legacyMbEl.value.includes(",")) {
+          // Formato viejo "HH:MM,HH:MM"
+          const parts = legacyMbEl.value.trim().split(",");
+          if (parts.length === 2) {
+            middayBreak = [parts[0].trim(), parts[1].trim()];
+          }
+        }
+
+        const body = {
+          system: system,
+          days: days,
+          fields: fields,
+          start_time: startTime,
+          end_time: endTime,
+          match_duration: matchDuration,
+          home_and_away: homeAndAway,
+        };
+        if (middayBreak) body.midday_break = middayBreak;
+
+        try {
+          const res = await fetch(`${BASE_URL}/generate_parts`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(data.error || "Error al generar datos");
+            return;
+          }
+          // Arreglar zonas de 2 equipos para que tengan ida y vuelta
+          // Arreglar zonas de 2 equipos para que tengan ida y vuelta
+          const fixedMatches = ensureTwoLegsForTwoTeamZones(data.matches);
+
+          // Guardar índice original (sirve para ordenar BYE también)
+          fixedMatches.forEach((m, idx) => {
+            if (m && typeof m === "object") m.__origIndex = idx;
+          });
+
+          lastGeneratedMatches = fixedMatches;
+
+          // Separar BYE/informativos para que NO queden en la lista y se auto-coloquen abajo
+          const byeMatches = fixedMatches.filter(m => isByeMatch(m));
+          const nonByeMatches = fixedMatches.filter(m => !isByeMatch(m));
+
+          // Renderizar solo los partidos “reales”
+          const sortedMatches = sortMatchesForDisplay(nonByeMatches);
+          renderMatches(sortedMatches);
+
+          const customTimeslots = buildTimeslotsFromAvailability(days, fields, matchDuration, startTime, endTime);
+          renderSchedule(customTimeslots, fields, matchDuration);
+
+          // ✅ Auto-colocar BYE/informativos en su día
+          autoFillByeZonesFromMatches(byeMatches);
+
+
+          // ✅ Auto-colocar BYE/informativos en su día
+          autoFillByeZonesFromMatches(byeMatches);
+
+        } catch (err) {
+          console.error(err);
+          alert("Error de red al generar datos");
+        }
+      });
+      function buildSlotsForDay(dayIndex, courtsCount, matchMinutes, defaultStart, defaultEnd) {
+        const dayCfg = courtAvailabilityByDay[dayIndex]?.courts || {};
+
+        const slots = []; // o tu estructura actual day->court->slots
+
+        for (let c = 1; c <= courtsCount; c++) {
+          const cfg = dayCfg[c] ?? { enabled: true, windows:           getDefaultWindowsFromGeneral(defaultStart, defaultEnd) };
+
+
+          if (!cfg.enabled) {
+            // cancha cerrada ese día: o no la incluyas o marcala bloqueada
+            continue;
+          }
+
+          const windows = (cfg.windows && cfg.windows.length)
+          ? cfg.windows
+          : getDefaultWindowsFromGeneral(defaultStart, defaultEnd);
+
+
+          for (const w of windows) {
+            const startMin = hhmmToMin(w.start);
+            const endMin   = hhmmToMin(w.end);
+
+            for (let t = startMin; t + matchMinutes <= endMin; t += matchMinutes) {
+              slots.push({
+                dayIndex,
+                court: c,
+                time: minToHHMM(t),
+                // y lo que ya tengas: idSlot, matchId=null, etc.
+              });
+            }
+          }
+        }
+
+        return slots;
+      }
+
+      function buildTimeslotsFromAvailability(days, fieldsCount, matchDuration, defaultStart, defaultEnd) {
+        const out = [];
+        for (let d = 0; d < days; d++) {
+          const dayDur = getMatchDurationForDay(d, matchDuration);
+          const slots = buildSlotsForDay(d, fieldsCount, dayDur, defaultStart, defaultEnd);
+          for (const s of slots) {
+            out.push({
+              day: d + 1,          // clave que usa renderSchedule()
+              time: s.time,        // "HH:MM"
+              field: s.court,      // número de cancha
+              match_id: null,
+              match_duration: dayDur
+            });
+          }
+        }
+        return out;
+      }
+
+      // Asegura que en las zonas con 2 equipos haya ida y vuelta
+      function ensureTwoLegsForTwoTeamZones(matches) {
+        if (!matches || !Array.isArray(matches)) return matches;
+
+        // IMPORTANTE:
+        // Solo forzamos ida/vuelta para zonas "reales" de fase regular (A..H).
+        // No debe aplicarse a llaves/finales/puestos ("LLAVE B", "ZA1", "23º - 24º", etc.)
+        const isGroupZone = (z) => /^[A-H]$/.test((z || "").toString().trim());
+
+        const byZone = {};
+        matches.forEach((m) => {
+          const z = (m.zone || "").toString().trim();
+          if (!isGroupZone(z)) return; // <-- clave: ignora fase final
+          if (!byZone[z]) byZone[z] = [];
+          byZone[z].push(m);
+        });
+
+        const newMatches = [...matches];
+
+        Object.keys(byZone).forEach((zone) => {
+          const zoneMatches = byZone[zone];
+          const teamSet = new Set();
+          zoneMatches.forEach((m) => {
+            if (m.home) teamSet.add(m.home);
+            if (m.away) teamSet.add(m.away);
+          });
+
+          // Si la zona tiene exactamente 2 equipos y solo 1 partido, agregamos la vuelta.
+          if (teamSet.size === 2) {
+            let pairCount = 0;
+            let exampleMatch = null;
+            let maxRound = 0;
+
+            zoneMatches.forEach((m) => {
+              if (!m || !m.home || !m.away) return;
+              pairCount++;
+              exampleMatch = m;
+
+              const r = parseInt(m.round || "0", 10);
+              if (!isNaN(r) && r > maxRound) maxRound = r;
+            });
+
+            if (pairCount === 1 && exampleMatch) {
+              const reverse = {
+                home: exampleMatch.away,
+                away: exampleMatch.home,
+                zone: exampleMatch.zone,
+                round: maxRound + 1,
+              };
+              newMatches.push(reverse);
+            }
+          }
+        });
+
+        return newMatches;
+      }
+
+        // Ordena los partidos para display (prioridad: número de partido)
+        // Esto respeta el orden oficial del PDF (ej: A,C,B,D cuando los números vienen así)
+        function sortMatchesForDisplay(matches) {
+          if (!matches || !Array.isArray(matches)) return matches;
+          return [...matches].sort((a, b) => {
+            const na = parseInt(a.number || "0", 10);
+            const nb = parseInt(b.number || "0", 10);
+
+            // 1) Si ambos tienen número válido, ordenar por número (respeta orden oficial del PDF)
+            if (!isNaN(na) && !isNaN(nb) && na !== 0 && nb !== 0 && na !== nb) {
+              return na - nb;
+            }
+
+            // 2) Fallback: por zona, luego ronda, luego local
+            const za = (a.zone || "").toString();
+            const zb = (b.zone || "").toString();
+            if (za < zb) return -1;
+            if (za > zb) return 1;
+
+            const ra = parseInt(a.round || "0", 10);
+            const rb = parseInt(b.round || "0", 10);
+            if (ra < rb) return -1;
+            if (ra > rb) return 1;
+
+            const ha = (a.home || "").toString();
+            const hb = (b.home || "").toString();
+            if (ha < hb) return -1;
+            if (ha > hb) return 1;
+
+            return 0;
+          });
+        }
+
+
+
+      // Renderizar lista de partidos
+        function renderMatches(matches) {
+          const regularDiv = document.getElementById("match-list-regular");
+          const finalDiv = document.getElementById("match-list-final");
+          const placeholder = document.getElementById("match-list-placeholder");
+
+          // ✅ contador de rondas por zona regular (A..H)
+          const regularRoundCounter = {};
+
+          // Limpiar paneles
+          if (regularDiv) regularDiv.innerHTML = "";
+          if (finalDiv) finalDiv.innerHTML = "";
+
+          if (!matches || matches.length === 0) {
+            if (placeholder) placeholder.style.display = "block";
+            return;
+          }
+          if (placeholder) placeholder.style.display = "none";
+
+          matches.forEach((m, idx) => {
+            const card = document.createElement("div");
+            card.className = "match-card";
+            card.draggable = true;
+
+            card.dataset.home = m.home;
+            card.dataset.away = m.away;
+            card.dataset.zone = m.zone;
+            card.dataset.number = m.number;
+            // NUEVO: para auto-ubicar por PDF
+            if (m.number !== undefined && m.number !== null) card.dataset.number = String(m.number);
+            if (m.day !== undefined && m.day !== null) card.dataset.pdfDay = String(m.day);
+            if (m.field !== undefined && m.field !== null) card.dataset.pdfField = String(m.field);
+
+            const zKey = String(m.zone || "").trim().toUpperCase();
+            let displayRound = parseInt(m.round || "1", 10);
+
+            // ✅ Regular (A..H):
+            // Para fixtures por PDF, el backend manda round=1..3 en fase regular.
+            // Si no viene round válido, caemos al comportamiento anterior (contador por zona).
+            if (isRegularZone(zKey)) {
+              const backendRound = parseInt(m.round || "", 10);
+
+              if (!isNaN(backendRound) && backendRound >= 1 && backendRound <= 3) {
+                displayRound = backendRound;
+              } else {
+                regularRoundCounter[zKey] = (regularRoundCounter[zKey] || 0) + 1;
+                displayRound = regularRoundCounter[zKey];
+              }
+            } else if (typeof getDisplayedRound === "function") {
+              // ✅ ZA1/ZA2: rondas internas 1..3 por número
+              displayRound = getDisplayedRound(zKey, m.number, displayRound);
+            }
+
+            card.dataset.round = displayRound;
+            card.dataset.originalIndex = idx;
+
+            card.innerHTML = matchCardHTML(m.home, m.away, m.zone, displayRound);
+            card.style.backgroundColor = getZoneColor(m.zone);
+
+            card.addEventListener("dragstart", handleDragStart);
+
+            const target = isRegularZone(zKey) ? regularDiv : finalDiv;
+            if (target) target.appendChild(card);
+          });
+        }
+
+
+
+
+
+      // Renderizar tabla de horarios
+        function renderSchedule(timeslots, fieldsCount, matchDuration) {
+        if (!scheduleContainer) {
+          console.error("No existe #schedule-container en el HTML.");
+          return;
+        }
+        scheduleContainer.innerHTML = "<h2>Horarios</h2>";
+        if (!timeslots || timeslots.length === 0) {
+          const p = document.createElement("p");
+          p.textContent = "No se generaron horarios.";
+          scheduleContainer.appendChild(p);
+          return;
+        }
+        const byDay = {};
+        timeslots.forEach((ts) => {
+          if (!byDay[ts.day]) byDay[ts.day] = [];
+          byDay[ts.day].push(ts);
+        });
+
+        Object.keys(byDay).forEach((day) => {
+          const slots = byDay[day];
+          const enumeration = {};
+          slots.forEach((slot, idx) => {
+            enumeration[slot.index] = idx + 1;
+          });
+
+          const fields = [...new Set(slots.map((s) => s.field))];
+          const times = [...new Set(slots.map((s) => s.time))];
+          times.sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+
+          const table = document.createElement("table");
+          table.className = "schedule-day";
+          const caption = document.createElement("caption");
+          caption.textContent = `Día ${day}`;
+          table.appendChild(caption);
+
+          const thead = document.createElement("thead");
+          const trh = document.createElement("tr");
+          const emptyTh = document.createElement("th");
+          emptyTh.textContent = "";
+          trh.appendChild(emptyTh);
+          fields.forEach((field) => {
+            const th = document.createElement("th");
+
+            th.innerHTML = `
+              <div style="display:flex; flex-direction:column; gap:6px; align-items:center;">
+                <div><strong>Cancha ${field}</strong></div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center;">
+                  <button type="button" class="btn" style="padding:4px 8px; border-radius:10px;" data-open-avail="1">
+                    Disponibilidad
+                  </button>
+                  <button type="button" class="btn" style="padding:4px 8px; border-radius:10px;" data-open-times="1">
+                    Horarios
+                  </button>
+                </div>
+              </div>
+            `;
+
+            const btnAvail = th.querySelector("button[data-open-avail]");
+            if (btnAvail) {
+              btnAvail.addEventListener("click", () => openAvailabilityFor(parseInt(day, 10), field));
+            }
+
+            const btnTimes = th.querySelector("button[data-open-times]");
+            if (btnTimes) {
+              btnTimes.addEventListener("click", () => scrollToTimeControls());
+            }
+
+            trh.appendChild(th);
+          });
+          thead.appendChild(trh);
+          table.appendChild(thead);
+
+          const tbody = document.createElement("tbody");
+          times.forEach((time) => {
+            const tr = document.createElement("tr");
+            const thTime = document.createElement("th");
+            thTime.textContent = time;
+            tr.appendChild(thTime);
+
+            fields.forEach((field) => {
+              const td = document.createElement("td");
+              td.className = "timeslot";
+              const slot = slots.find(
+                (s) => s.time === time && s.field === field,
+              );
+              if (slot) {
+                td.dataset.day = slot.day;
+                td.dataset.time = slot.time;
+                td.dataset.field = slot.field;
+                td.dataset.index = slot.index;
+                td.dataset.matchDuration = parseInt(slot.match_duration || matchDuration, 10);
+                const num = enumeration[slot.index] || "";
+                td.dataset.slotNumber = num;
+                const numSpan = document.createElement("span");
+                numSpan.className = "slot-number";
+                numSpan.textContent = num;
+                td.appendChild(numSpan);
+                td.addEventListener("dragover", handleDragOver);
+                td.addEventListener("drop", handleDrop);
+                // Hacemos que la celda sea draggable para poder mover partidos entre slots
+                td.draggable = true;
+                td.addEventListener("dragstart", handleSlotDragStart);
+              }
+              tr.appendChild(td);
+            });
+
+            tbody.appendChild(tr);
+          });
+
+          table.appendChild(tbody);
+          scheduleContainer.appendChild(table);
+          // ✅ Área BYE debajo del día: solo acepta partidos con BYE
+          const byeWrap = document.createElement("div");
+          byeWrap.className = "bye-area";
+
+          const byeTitle = document.createElement("div");
+          byeTitle.className = "bye-title";
+          byeTitle.textContent = `BYE (Día ${day})`;
+
+          const byeDrop = document.createElement("div");
+          byeDrop.className = "bye-dropzone";
+          byeDrop.dataset.day = day;
+          byeDrop.addEventListener("dragover", handleDragOver);
+          byeDrop.addEventListener("drop", handleByeDrop);
+
+          byeWrap.appendChild(byeTitle);
+          byeWrap.appendChild(byeDrop);
+          scheduleContainer.appendChild(byeWrap);
+
+        });
+      }
+        function autoFillByeZonesFromMatches(byeMatches) {
+          // Mapa: "1" -> div.bye-dropzone del Día 1, etc.
+          const dzByDay = {};
+          document.querySelectorAll(".bye-dropzone").forEach(dz => {
+            const d = String(dz.dataset.day || "");
+            dzByDay[d] = dz;
+            dz.innerHTML = ""; // limpiar para rearmar (evita duplicados)
+          });
+
+          const list = (byeMatches || []).slice().sort((a, b) => {
+            const da = parseInt(a?.day || 0, 10) || 0;
+            const db = parseInt(b?.day || 0, 10) || 0;
+            if (da !== db) return da - db;
+            const na = parseInt(a?.number || 0, 10) || 0;
+            const nb = parseInt(b?.number || 0, 10) || 0;
+            return na - nb;
+          });
+
+          for (const m of list) {
+            const dayNum = parseInt(m?.day || 0, 10) || 0;
+            const dayKey = String(dayNum);
+            const dz = dzByDay[dayKey];
+            if (!dz) continue;
+
+            const number = (m.number ?? "");
+            const home = String(m.home ?? "");
+            const away = String(m.away ?? "");
+            const zone = String(m.zone ?? "");
+            const round = String(m.round ?? "");
+
+            // Evitar duplicados por número
+            if (number !== "" && dz.querySelector(`.match-card[data-number="${String(number)}"]`)) {
+              continue;
+            }
+
+            const card = document.createElement("div");
+            card.className = "match-card";
+            card.draggable = true;
+
+            card.dataset.number = String(number);
+            card.dataset.round = round;
+            card.dataset.zone = zone;
+            card.dataset.day = dayKey;
+
+            // si existe índice original lo conservamos
+            if (m.__origIndex != null) {
+              card.dataset.originalIndex = String(m.__origIndex);
+            } else {
+              card.dataset.originalIndex = String(number);
+            }
+
+            card.innerHTML = matchCardHTML(home, away, zone, round);
+            card.style.backgroundColor = getZoneColor(zone);
+
+            card.addEventListener("dragstart", handleDragStart);
+
+            // Insertar ordenado por Nº de partido dentro del BYE del día
+            const n = parseInt(String(number), 10);
+            if (!isNaN(n)) {
+              const siblings = Array.from(dz.querySelectorAll(".match-card"));
+              const before = siblings.find(el => {
+                const en = parseInt(el.dataset.number || "", 10);
+                return !isNaN(en) && en > n;
+              });
+              if (before) dz.insertBefore(card, before);
+              else dz.appendChild(card);
+            } else {
+              dz.appendChild(card);
+            }
+          }
+        }
+
+
+        
+      // Drag & drop desde la lista
+      function handleDragStart(ev) {
+        draggedCard = this;
+        draggedCell = null;
+      }
+
+      // Drag desde una celda del tablero
+      function handleSlotDragStart(ev) {
+        // Solo tiene sentido arrastrar si la celda tiene un partido
+        if (!this.classList.contains("filled")) {
+          ev.preventDefault();
+          return;
+        }
+        draggedCell = this;
+        draggedCard = null;
+      }
+
+      function handleDragOver(ev) {
+        ev.preventDefault();
+      }
+
+      function handleDrop(ev) {
+        ev.preventDefault();
+        const cell = this;
+
+        // No dejamos caer sobre celdas sin horario configurado
+        if (!cell.dataset.day) return;
+
+        const day = parseInt(cell.dataset.day, 10);
+        const time = cell.dataset.time;
+        const dayIndex = day - 1;
+        const matchDuration = parseInt(cell.dataset.matchDuration, 10);
+        const restMinutes = getRestMinutesForDay(dayIndex, isNaN(matchDuration) ? 0 : matchDuration);
+
+        let home, away, zone, round, originalIndex, number;
+
+        // Caso 1: arrastramos desde la lista de partidos
+        if (draggedCard) {
+          if (cell.classList.contains("filled")) {
+            // Podríamos permitir swap, pero por ahora no
+            alert("Ese horario ya tiene un partido asignado.");
+            return;
+          }
+          home = draggedCard.dataset.home;
+          away = draggedCard.dataset.away;
+          // ✅ BYE: no se permite asignar a un horario
+          if (isByeMatch(home, away)) {
+            alert('Los partidos con BYE no se asignan a horarios. Arrastralos al área "BYE" debajo del día.');
+            return;
+          }
+          zone = draggedCard.dataset.zone;
+          round = draggedCard.dataset.round;
+          originalIndex = draggedCard.dataset.originalIndex;
+          number = draggedCard.dataset.number;
+       }
+        // Caso 2: arrastramos desde otra celda del tablero
+        else if (draggedCell) {
+          if (cell === draggedCell) return; // soltar en sí misma, no hace nada
+
+          if (cell.classList.contains("filled")) {
+            alert("Ese horario ya tiene un partido asignado.");
+            return;
+          }
+
+          home = draggedCell.dataset.home;
+          away = draggedCell.dataset.away;
+          zone = draggedCell.dataset.zone;
+          round = draggedCell.dataset.round;
+          originalIndex = draggedCell.dataset.originalIndex;
+          number = draggedCell.dataset.number;
+        } else {
+          // Nada que arrastrar
+          return;
+        }
+
+        // Verificar descanso mínimo para los equipos (ignorando la celda de origen si existe)
+        const filledSlots = document.querySelectorAll("td.timeslot.filled");
+        for (const fs of filledSlots) {
+          if (fs === draggedCell) continue; // ignorar el slot de origen
+          const fsDay = parseInt(fs.dataset.day, 10);
+          if (fsDay !== day) continue;
+          const fsTime = fs.dataset.time;
+          const fsHome = fs.dataset.home;
+          const fsAway = fs.dataset.away;
+          if (
+            fsHome === home ||
+            fsHome === away ||
+            fsAway === home ||
+            fsAway === away
+          ) {
+            const diff = Math.abs(timeToMinutes(fsTime) - timeToMinutes(time));
+            if (diff < restMinutes) {
+              alert(
+                "No se puede asignar: el equipo ya tiene un partido cercano.",
+              );
+              return;
+            }
+          }
+        }
+
+        // Asignar partido a la celda destino
+        cell.classList.add("filled");
+        const zoneColor = getZoneColor(zone) || "#cfe8cf";
+        cell.style.backgroundColor = zoneColor;
+
+        cell.dataset.home = home;
+        cell.dataset.away = away;
+        cell.dataset.zone = zone;
+        cell.dataset.round = round;
+
+        if (number !== undefined && number !== null && number !== "") {
+          cell.dataset.number = String(number);
+        } else {
+          delete cell.dataset.number;
+        }
+
+        if (number !== undefined) {
+          cell.dataset.number = number;
+        }
+        if (originalIndex !== undefined) {
+          cell.dataset.originalIndex = originalIndex;
+        }
+
+        const roundPartCell = shouldShowRound(zone) ? ` - Ronda ${round}` : "";
+        cell.innerHTML = `${displayMatchText(home, away)} (Zona ${zone}${roundPartCell})`;              const removeBtn = document.createElement("button");
+        removeBtn.className = "remove-btn";
+        removeBtn.textContent = "×";
+        removeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          removeMatch(cell);
+        });
+        cell.appendChild(removeBtn);
+
+        // Si venimos de la lista, eliminamos la tarjeta
+        if (draggedCard) {
+          draggedCard.remove();
+          draggedCard = null;
+        }
+        // Si venimos de otra celda, la limpiamos pero SIN devolver el partido a la lista
+        if (draggedCell) {
+          const sourceCell = draggedCell;
+          draggedCell = null;
+          clearCell(sourceCell);
+        }
+      }
+        function handleByeDrop(ev) {
+          ev.preventDefault();
+          const dropZone = this;
+
+          let home, away, zone, round, originalIndex, number;
+
+          if (draggedCard) {
+            home = draggedCard.dataset.home;
+            away = draggedCard.dataset.away;
+            zone = draggedCard.dataset.zone;
+            round = draggedCard.dataset.round;
+            originalIndex = parseInt(draggedCard.dataset.originalIndex || "0", 10);
+            number = draggedCard.dataset.number;
+          } else if (draggedCell) {
+            // (por seguridad) si alguna vez hubiera BYE en una celda
+            home = draggedCell.dataset.home;
+            away = draggedCell.dataset.away;
+            zone = draggedCell.dataset.zone;
+            round = draggedCell.dataset.round;
+            originalIndex = parseInt(draggedCell.dataset.originalIndex || "0", 10);
+            number = draggedCell.dataset.number;
+          } else {
+            return;
+          }
+
+          if (!isByeMatch(home, away)) {
+            alert('Solo se pueden colocar partidos con BYE en este espacio.');
+            return;
+          }
+
+          // Evitar duplicados por número
+          if (number && dropZone.querySelector(`[data-number="${number}"]`)) {
+            return;
+          }
+
+          // Crear tarjeta BYE
+          const byeCard = document.createElement("div");
+          byeCard.className = "match-card";
+          byeCard.draggable = true;
+
+          byeCard.dataset.home = home;
+          byeCard.dataset.away = away;
+          byeCard.dataset.zone = zone;
+          byeCard.dataset.round = round;
+          byeCard.dataset.originalIndex = originalIndex;
+          if (number !== undefined) byeCard.dataset.number = number;
+
+          byeCard.innerHTML = matchCardHTML(home, away, zone, round);
+          byeCard.style.backgroundColor = getZoneColor(zone);
+          byeCard.addEventListener("dragstart", handleDragStart);
+
+          // Click para devolver a la lista
+          byeCard.addEventListener("click", () => {
+            byeCard.remove();
+            // Reinsertar en la lista correcta (regular/final) por índice original
+            const regularDiv = document.getElementById("match-list-regular");
+            const finalDiv = document.getElementById("match-list-final");
+            const targetList = isRegularZone(zone) ? regularDiv : finalDiv;
+
+            const existingCards = Array.from(targetList.querySelectorAll(".match-card"));
+            let inserted = false;
+            for (const c of existingCards) {
+              const cIndex = parseInt(c.dataset.originalIndex || "0", 10);
+              if (cIndex > originalIndex) {
+                targetList.insertBefore(byeCard, c);
+                inserted = true;
+                break;
+              }
+            }
+            if (!inserted) targetList.appendChild(byeCard);
+          });
+
+          // Si viene de la lista o de otra BYE zone, sacarlo de donde estaba
+          if (draggedCard) draggedCard.remove();
+
+          // Si venía de una celda (caso raro), limpiar la celda
+          if (draggedCell) {
+            draggedCell.classList.remove("filled");
+            draggedCell.style.backgroundColor = "";
+            draggedCell.innerHTML = "";
+            delete draggedCell.dataset.home;
+            delete draggedCell.dataset.away;
+            delete draggedCell.dataset.zone;
+            delete draggedCell.dataset.round;
+            delete draggedCell.dataset.originalIndex;
+            delete draggedCell.dataset.number;
+            draggedCell = null;
+          }
+
+          dropZone.appendChild(byeCard);
+          draggedCard = null;
+        }
+
+      // Quitar partido de celda y devolverlo a la lista en su lugar original
+      function removeMatch(cell) {
+        const home = cell.dataset.home;
+        const away = cell.dataset.away;
+        const zone = cell.dataset.zone;
+        const round = cell.dataset.round;
+        const originalIndex = parseInt(cell.dataset.originalIndex || "0", 10);
+        const number = cell.dataset.number;
+
+
+
+        // Crear nueva tarjeta
+        const newCard = document.createElement("div");
+        newCard.className = "match-card";
+        newCard.draggable = true;
+        newCard.dataset.home = home;
+        newCard.dataset.away = away;
+        newCard.dataset.zone = zone;
+        newCard.dataset.round = round;
+        newCard.dataset.originalIndex = originalIndex;
+        if (number !== undefined && number !== null && number !== "") newCard.dataset.number = String(number);
+
+        newCard.innerHTML = matchCardHTML(home, away, zone, round);
+
+        const color = getZoneColor(zone);
+        newCard.style.backgroundColor = color;
+        newCard.addEventListener("dragstart", handleDragStart);
+
+        // Insertar tarjeta en la lista según su índice original
+        const regularDiv = document.getElementById("match-list-regular");
+        const finalDiv = document.getElementById("match-list-final");
+        const targetList = isRegularZone(zone) ? regularDiv : finalDiv;
+
+        const existingCards = Array.from(targetList.querySelectorAll(".match-card"));
+        let inserted = false;
+        for (const c of existingCards) {
+          const cIndex = parseInt(c.dataset.originalIndex || "0", 10);
+          if (cIndex > originalIndex) {
+            targetList.insertBefore(newCard, c);
+            inserted = true;
+            break;
+          }
+        }
+        if (!inserted) {
+          targetList.appendChild(newCard);
+        }
+
+
+        clearCell(cell);
+      }
+
+      // Limpia una celda y restaura su número de slot
+      function clearCell(cell) {
+        cell.classList.remove("filled");
+        cell.style.backgroundColor = "";
+        delete cell.dataset.home;
+        delete cell.dataset.away;
+        delete cell.dataset.zone;
+        delete cell.dataset.round;
+        delete cell.dataset.originalIndex;
+        delete cell.dataset.number;
+
+        const slotNumber = cell.dataset.slotNumber || "";
+        cell.innerHTML = "";
+        const numSpan = document.createElement("span");
+        numSpan.className = "slot-number";
+        numSpan.textContent = slotNumber;
+        cell.appendChild(numSpan);
+
+        // Aseguramos que siga aceptando drops
+        cell.addEventListener("dragover", handleDragOver);
+        cell.addEventListener("drop", handleDrop);
+        cell.draggable = true;
+        cell.addEventListener("dragstart", handleSlotDragStart);
+      }
+        // =====================================================
+        // AUTO-UBICAR SEGÚN PDF (usa m.day y m.field del backend)
+        // - Coloca en el primer horario libre del Día/Cancha indicado
+        // - Respeta la misma restricción de descanso mínimo que el drag&drop
+        // - NO coloca partidos BYE en el tablero
+        // =====================================================
+
+        function normalizeFieldToNumber(fieldVal) {
+          const s = (fieldVal ?? "").toString().trim();
+          if (!s) return null;
+
+          // "C1" / "C2" -> 1 / 2
+          if (/^C\d+$/i.test(s)) {
+            const n = parseInt(s.slice(1), 10);
+            return isNaN(n) ? null : n;
+          }
+
+          // "1" / "2" -> 1 / 2
+          const n = parseInt(s, 10);
+          return isNaN(n) ? null : n;
+        }
+
+
+
+        function findCardForMatch(m) {
+          // 1) Por número (lo más seguro)
+          if (m.number !== undefined && m.number !== null) {
+            const byNum = document.querySelector(`.match-card[data-number="${String(m.number)}"]`);
+            if (byNum) return byNum;
+          }
+
+          // 2) Fallback: por datos
+          const cards = document.querySelectorAll(".match-card");
+          for (const c of cards) {
+            if (
+              c.dataset.home === String(m.home ?? "") &&
+              c.dataset.away === String(m.away ?? "") &&
+              (c.dataset.zone ?? "") === String(m.zone ?? "") &&
+              String(c.dataset.round ?? "") === String(m.round ?? "")
+            ) {
+              return c;
+            }
+          }
+          return null;
+        }
+
+        function canPlaceMatchInCell(cell, m) {
+          const day = parseInt(cell.dataset.day, 10);
+          const time = cell.dataset.time;
+
+          const matchDuration = parseInt(cell.dataset.matchDuration || "0", 10);
+          const dayIndex = day - 1;
+          const restMinutes = getRestMinutesForDay(dayIndex, isNaN(matchDuration) ? 0 : matchDuration);
+          const home = String(m.home ?? "");
+          const away = String(m.away ?? "");
+
+          // Misma lógica que handleDrop: mirar todos los filled del mismo día
+          const filledSlots = document.querySelectorAll("td.timeslot.filled");
+          for (const fs of filledSlots) {
+            const fsDay = parseInt(fs.dataset.day, 10);
+            if (fsDay !== day) continue;
+
+            const fsTime = fs.dataset.time;
+            const fsHome = fs.dataset.home;
+            const fsAway = fs.dataset.away;
+
+            if (
+              fsHome === home ||
+              fsHome === away ||
+              fsAway === home ||
+              fsAway === away
+            ) {
+              const diff = Math.abs(timeToMinutes(fsTime) - timeToMinutes(time));
+              if (diff < restMinutes) {
+                return false;
+              }
+            }
+          }
+
+          return true;
+        }
+
+          function assignMatchToCell(cell, m, originalIndex, roundOverride) {
+          const home = String(m.home ?? "");
+          const away = String(m.away ?? "");
+            const zone = String(m.zone ?? "");
+            const round = (roundOverride !== undefined && roundOverride !== null)
+              ? String(roundOverride)
+              : String(m.round ?? "");
+
+          cell.classList.add("filled");
+          cell.style.backgroundColor = getZoneColor(zone) || "#cfe8cf";
+
+          cell.dataset.home = home;
+          cell.dataset.away = away;
+          cell.dataset.zone = zone;
+          cell.dataset.round = round;
+            if (m.number !== undefined && m.number !== null && m.number !== "") {
+              cell.dataset.number = String(m.number);
+            } else {
+              delete cell.dataset.number;
+            }
+
+          const roundPartCell = shouldShowRound(zone) ? ` - Ronda ${round}` : "";
+          cell.innerHTML = `${displayMatchText(home, away)} (Zona ${zone}${roundPartCell})`;
+
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "remove-btn";
+          removeBtn.textContent = "×";
+          removeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            removeMatch(cell);
+          });
+          cell.appendChild(removeBtn);
+        }
+
+        function autoPlaceMatchesAccordingToPdf() {
+          if (!lastGeneratedMatches || !lastGeneratedMatches.length) {
+            alert("Primero hacé clic en “Generar horarios y partidos”.");
+            return;
+          }
+
+          const allCells = Array.from(
+            document.querySelectorAll('td.timeslot[data-day][data-time][data-field]')
+          );
+
+          if (!allCells.length) {
+            alert("No hay horarios generados en el tablero.");
+            return;
+          }
+
+          const alreadyFilled = document.querySelectorAll("td.timeslot.filled").length;
+          if (alreadyFilled) {
+            alert("El tablero ya tiene partidos ubicados. Sacalos con (×) antes de usar Auto-ubicar.");
+            return;
+          }
+
+          // ✅ Checkbox: permitir compactación SOLO si está tildado
+          const allowCompaction = !!document.getElementById("allow_compaction")?.checked;
+
+          // Agrupar celdas por día
+          const cellsByDay = new Map();
+          for (const cell of allCells) {
+            const day = parseInt(cell.dataset.day, 10);
+            if (!cellsByDay.has(day)) cellsByDay.set(day, []);
+            cellsByDay.get(day).push(cell);
+          }
+
+          // Construir orden "por filas" para un día: hora ascendente, y dentro de cada hora cancha ascendente
+          function buildRowWiseCellsForDay(day) {
+            const cells = (cellsByDay.get(day) || []).slice();
+
+            // lista de canchas disponibles ese día (números)
+            const fields = Array.from(
+              new Set(cells.map(c => parseInt(c.dataset.field, 10)).filter(n => !isNaN(n)))
+            ).sort((a, b) => a - b);
+
+            // lista de horarios disponibles ese día (strings) ordenados
+            const times = Array.from(
+              new Set(cells.map(c => c.dataset.time).filter(Boolean))
+            ).sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+
+            // Mapa rápido para encontrar celda exacta por (time, field)
+            const lookup = new Map();
+            for (const c of cells) {
+              const key = `${c.dataset.time}|${c.dataset.field}`;
+              lookup.set(key, c);
+            }
+
+            const ordered = [];
+            for (const t of times) {
+              for (const f of fields) {
+                const key = `${t}|${f}`;
+                const cell = lookup.get(key);
+                if (cell) ordered.push(cell);
+              }
+            }
+            return ordered;
+          }
+
+          // Matches ordenados por número (orden del PDF)
+          const matchesAll = [...lastGeneratedMatches]
+            .filter(m => m && m.number !== undefined && m.number !== null)
+            .sort((a, b) => (a.number || 0) - (b.number || 0));
+
+          // Reset del tablero (por si hacemos 2do intento)
+          function resetBoard() {
+            const filled = Array.from(document.querySelectorAll("td.timeslot.filled"));
+            for (const cell of filled) removeMatch(cell);
+          }
+
+          // Días candidatos:
+          // - normal: solo el día del PDF
+          // - compactación (solo si checkbox ON y no entra):
+          //    * Regular (A..H) del día 2 -> probar día 1 primero, luego día 2
+          //    * Final (no A..H) del día 3 -> probar día 3, y si no entra, día 2
+          function getCandidateDays(m, relaxMode) {
+            const originalDay = parseInt(m.day, 10);
+            if (!relaxMode) return [originalDay];
+
+            const z = String(m.zone || "").trim().toUpperCase();
+            const isRegular = /^[A-H]$/.test(z); // sirve también para A..G
+
+            if (isRegular && originalDay === 2) return [1, 2];
+            if (!isRegular && originalDay === 3) return [2, 3];
+            if (!isRegular && originalDay === 4) return [3, 4];
+            if (!isRegular && originalDay === 5) return [4, 5];
+
+            return [originalDay];
+          }
+
+          // ✅ NUEVO: manda BYE/informativos al área BYE del día correspondiente
+          function placeByeMatchIntoByeArea(m) {
+            const day = parseInt(m.day || "0", 10);
+            const dz = document.querySelector(`.bye-dropzone[data-day="${day}"]`);
+            if (!dz) return false;
+
+            const numStr = String(m.number || "");
+            // evitar duplicados
+            if (numStr && dz.querySelector(`.match-card[data-number="${numStr}"]`)) return true;
+
+            // Intentamos “tomar” la tarjeta real desde las listas para no perder info
+            const srcCard = findCardForMatch(m);
+
+            const homeRaw = (srcCard?.dataset?.home ?? m.home ?? "");
+            const awayRaw = (srcCard?.dataset?.away ?? m.away ?? "");
+            const zoneRaw = (srcCard?.dataset?.zone ?? m.zone ?? "");
+            const roundRaw = (srcCard?.dataset?.round ?? m.round ?? 1);
+
+            // Quitamos la original de la lista (si existe)
+            if (srcCard) srcCard.remove();
+
+            // Creamos tarjeta tipo BYE (igual estilo que handleByeDrop)
+            const byeCard = document.createElement("div");
+            byeCard.className = "match-card";
+            byeCard.draggable = true;
+
+            byeCard.dataset.number = numStr;
+            byeCard.dataset.home = homeRaw;   // ✅ CLAVE: esto alimenta export PDF/Excel
+            byeCard.dataset.away = awayRaw;   // ✅ CLAVE: esto alimenta export PDF/Excel
+            byeCard.dataset.zone = String(zoneRaw || "");
+            byeCard.dataset.round = String(roundRaw || "1");
+            byeCard.dataset.originalIndex = String(m.number || "");
+
+            // Contenido visible de la tarjeta
+            byeCard.innerHTML = matchCardHTML(homeRaw, awayRaw, zoneRaw, getDisplayedRound(zoneRaw, m.number, roundRaw));
+
+            // Color por zona (mismo criterio que el resto)
+            byeCard.style.backgroundColor = getZoneColor(zoneRaw);
+
+            byeCard.addEventListener("dragstart", handleDragStart);
+
+            // Click: volver a la lista (mismo comportamiento que BYE manual)
+            byeCard.addEventListener("click", () => {
+              byeCard.remove();
+              const z = (byeCard.dataset.zone || "").trim();
+              const target = isRegularZone(z)
+                ? document.getElementById("match-list-regular")
+                : document.getElementById("match-list-final");
+              if (target) target.appendChild(byeCard);
+            });
+
+            dz.appendChild(byeCard);
+            return true;
+          }
+
+              
+          function attempt(relaxMode) {
+            const errors = [];
+            let skippedBye = 0;
+
+            for (const m of matchesAll) {
+              if (isByeMatch(m)) {
+                // ✅ BYE e informativos: van automáticamente al área BYE del día correspondiente
+                placeByeMatchIntoByeArea(m);
+                skippedBye++;
+                continue; // no van al tablero
+              }
+
+
+              const candidateDays = getCandidateDays(m, relaxMode).filter(Boolean);
+
+              let placed = false;
+
+              for (const day of candidateDays) {
+                if (!day || !cellsByDay.has(day)) continue;
+
+                const orderedCells = buildRowWiseCellsForDay(day);
+
+                for (const cell of orderedCells) {
+                  if (cell.classList.contains("filled")) continue;
+                  if (!canPlaceMatchInCell(cell, m)) continue;
+
+                  const card = findCardForMatch(m);
+                  const originalIndex = card ? card.dataset.originalIndex : String(m.number);
+
+                  // ✅ round correcto: usar el de la tarjeta si existe
+                  const roundForCell = card && card.dataset.round ? card.dataset.round : m.round;
+
+                  assignMatchToCell(cell, m, originalIndex, roundForCell);
+
+                  if (card) card.remove();
+                  placed = true;
+                  break;
+                }
+
+                if (placed) break;
+              }
+
+              if (!placed) {
+                const origDay = parseInt(m.day, 10);
+                const extra = relaxMode && candidateDays.length > 1
+                  ? ` (probé días ${candidateDays.join(", ")}; original=${origDay})`
+                  : "";
+                errors.push(
+                  `Partido ${m.number}: no entra con los horarios/canchas disponibles (o por descanso mínimo).${extra}`
+                );
+              }
+            }
+
+            return { errors, skippedBye };
+          }
+
+          // 1) Intento normal
+          let { errors, skippedBye } = attempt(false);
+
+          // 2) Si NO entra y checkbox ON -> reintento con compactación
+          let usedFallback = false;
+          if (errors.length && allowCompaction) {
+            resetBoard();
+            ({ errors, skippedBye } = attempt(true));
+            usedFallback = errors.length === 0;
+          }
+
+          if (errors.length) {
+            const head = `No se pudieron ubicar ${errors.length} partidos.`;
+            const body = errors.slice(0, 25).join("\n");
+            const tail = errors.length > 25 ? `\n... y ${errors.length - 25} más.` : "";
+            alert(`${head}\n\n${body}${tail}`);
+            return;
+          }
+
+          const byeMsg = skippedBye > 0
+          ? `\nNota: ${skippedBye} partidos BYE/informativos se ubicaron automáticamente en el área BYE del día correspondiente.`
+          : "";
+
+          const fallbackMsg = usedFallback
+            ? `\n\nSe aplicó compactación automática (checkbox activado): algunos partidos de fase regular del Día 2 pasaron al Día 1, y algunos partidos de fase final del Día 3 pasaron al Día 2.`
+            : "";
+
+          alert(`Listo: se auto-ubicaron los partidos manteniendo el orden y usando canchas extra si hacía falta.${byeMsg}${fallbackMsg}`);
+        }
+
+
+
+        // Hook del botón (sin romper si el botón no existe por algún motivo)
+        if (autoPlaceBtn) {
+          autoPlaceBtn.addEventListener("click", autoPlaceMatchesAccordingToPdf);
+        }
+
+        // =============================
+        // EXPORTACIÓN PDF / EXCEL (DRAG & DROP)
+        // ✅ IMPORTANTE: estos listeners deben registrarse UNA sola vez.
+        // =============================
+
+        function collectScheduleFromGrid() {
+          const filledCells = document.querySelectorAll("td.timeslot.filled");
+          if (!filledCells.length) {
+            alert("No hay partidos asignados en el tablero.");
+            return null;
+          }
+
+          const schedule = [];
+          filledCells.forEach((cell) => {
+            schedule.push({
+              number: (cell.dataset.number ? parseInt(cell.dataset.number, 10) : null),
+              day: parseInt(cell.dataset.day, 10),
+              time: cell.dataset.time,
+              field: cell.dataset.field,
+              home: displayTeamName(cell.dataset.home),
+              away: displayTeamName(cell.dataset.away),
+              zone: cell.dataset.zone,
+              round: parseInt(cell.dataset.round || "1", 10),
+            });
+          });
+
+          return schedule;
+        }
+
+        function collectMeta() {
+          return {
+            disciplina:
+              (document.getElementById("discipline_custom")?.value || "").trim() ||
+              (document.getElementById("discipline_select")?.value || "").trim(),
+            categoria:
+              (document.getElementById("category_custom")?.value || "").trim() ||
+              (document.getElementById("category_select")?.value || "").trim(),
+            genero:
+              (document.getElementById("gender_custom")?.value || "").trim() ||
+              (document.getElementById("gender_select")?.value || "").trim(),
+            modalidad:
+              (document.getElementById("modality_custom")?.value || "").trim() ||
+              (document.getElementById("modality_select")?.value || "").trim(),
+          };
+        }
+
+        function collectByeByDay() {
+          const byeByDay = {};
+          document.querySelectorAll(".bye-dropzone").forEach((dz) => {
+            const day = dz.dataset.day;
+            if (!day) return;
+
+            const cards = Array.from(dz.querySelectorAll(".match-card"));
+            byeByDay[day] = cards.map((c) => {
+              const safeHome = (c.dataset.home || "").trim();
+              const safeAway = (c.dataset.away || "").trim();
+
+              let home = displayTeamName(safeHome);
+              let away = displayTeamName(safeAway);
+
+              // fallback: si por alguna razón no hay dataset, usar lo visible en la tarjeta
+              if (!home && !away) {
+                const txt = (c.textContent || "").trim();
+                if (txt) {
+                  home = txt;
+                  away = "";
+                }
+              }
+
+              return {
+                day: parseInt(day, 10),
+                number: parseInt(c.dataset.number || "0", 10) || null,
+                home,
+                away,
+                zone: c.dataset.zone || "",
+              };
+            });
+          });
+
+          return byeByDay;
+        }
+
+        async function downloadFile(endpoint, filename) {
+          const schedule = collectScheduleFromGrid();
+          if (!schedule) return;
+
+          const meta = collectMeta();
+          meta.bye_matches_by_day = collectByeByDay();
+
+          const res = await fetch(`${BASE_URL}${endpoint}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ schedule, meta }),
+          });
+
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            alert(data.error || "Error al generar el archivo.");
+            return;
+          }
+
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        }
+
+        exportBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          if (exportBtn.dataset.busy === "1") return;
+          exportBtn.dataset.busy = "1";
+          exportBtn.disabled = true;
+
+          try {
+            await downloadFile("/export_manual_pdf", "fixture_manual.pdf");
+          } catch (err) {
+            console.error(err);
+            alert("Error de red al solicitar el PDF.");
+          } finally {
+            exportBtn.disabled = false;
+            exportBtn.dataset.busy = "0";
+          }
+        });
+
+        exportExcelBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          if (exportExcelBtn.dataset.busy === "1") return;
+          exportExcelBtn.dataset.busy = "1";
+          exportExcelBtn.disabled = true;
+
+          try {
+            await downloadFile("/export_manual_excel", "fixture_manual.xlsx");
+          } catch (err) {
+            console.error(err);
+            alert("Error de red al solicitar el Excel.");
+          } finally {
+            exportExcelBtn.disabled = false;
+            exportExcelBtn.dataset.busy = "0";
+          }
+        });
+
+
+
+      // Utilidad para convertir "HH:MM" a minutos
+      function timeToMinutes(t) {
+        const [h, m] = t.split(":").map((v) => parseInt(v, 10));
+        return h * 60 + m;
+      }
+
+      // =============================
+      // Listas CSV (disciplina, categoría, género, modalidad)
+      // =============================
+
+      async function importSimpleList(kind, fileInputId, selectId) {
+        const fileInput = document.getElementById(fileInputId);
+        const selectElem = document.getElementById(selectId);
+
+        if (!fileInput || !selectElem) {
+          console.error("No se encontró uno de los elementos para", kind, fileInputId, selectId);
+          alert("Error interno: no se encontró un elemento en la página.");
+          return;
+        }
+
+        const file = fileInput.files[0];
+        if (!file) {
+          alert("Seleccioná un archivo CSV primero.");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+          const resp = await fetch(`${BASE_URL}/import_list/${kind}`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!resp.ok) {
+            let msg = `Error al importar ${kind}`;
+            try {
+              const errData = await resp.json();
+              if (errData.error) msg = errData.error;
+            } catch (e) {}
+            alert(msg);
+            return;
+          }
+
+          const data = await resp.json();
+          console.log("Respuesta import_list", kind, data);
+          const items = data.items || [];
+
+          selectElem.innerHTML = '<option value="">(Elegir de la lista)</option>';
+          items.forEach((item) => {
+            const opt = document.createElement("option");
+            opt.value = item;
+            opt.textContent = item;
+            selectElem.appendChild(opt);
+          });
+
+          alert(`Se cargaron ${items.length} ítems para ${kind}.`);
+        } catch (err) {
+          console.error(err);
+          alert(`Error de red al importar ${kind}`);
+        }
+      }
+        // -------- Precarga automática de desplegables (desde CSV en raíz vía backend) --------
+
+        function fillSelectPreserveCustom(selectId, items) {
+          const selectElem = document.getElementById(selectId);
+          if (!selectElem) return;
+
+          const currentValue = selectElem.value;
+
+          // Guardar opciones "custom" para no perder el autocompletado por nombre de archivo
+          const customOpts = Array.from(selectElem.options).filter(
+            (opt) => opt.dataset && opt.dataset.custom === "true"
+          );
+
+          // Reset base
+          selectElem.innerHTML = '<option value="">(Elegir de la lista)</option>';
+
+          const seen = new Set();
+          (items || []).forEach((item) => {
+            const v = (item || "").trim();
+            if (!v) return;
+            if (seen.has(v)) return;
+            seen.add(v);
+
+            const opt = document.createElement("option");
+            opt.value = v;
+            opt.textContent = v;
+            selectElem.appendChild(opt);
+          });
+
+          // Reinsertar custom si no están
+          customOpts.forEach((opt) => {
+            const v = (opt.value || "").trim();
+            if (!v) return;
+            if (seen.has(v)) return;
+            selectElem.appendChild(opt);
+            seen.add(v);
+          });
+
+          // Restaurar valor si existía
+          if (currentValue) {
+            selectElem.value = currentValue;
+          }
+        }
+
+        async function loadCompetitionListsOnStartup() {
+          try {
+            const resp = await fetch(`${BASE_URL}/competition_lists`);
+            if (!resp.ok) {
+              console.warn("No se pudo cargar /competition_lists:", resp.status);
+              return;
+            }
+
+            const data = await resp.json();
+
+            fillSelectPreserveCustom("discipline_select", data.disciplinas || []);
+            fillSelectPreserveCustom("category_select", data.categorias || []);
+            fillSelectPreserveCustom("gender_select", data.generos || []);
+            fillSelectPreserveCustom("modality_select", data.modalidades || []);
+
+            if (data.missing_files && data.missing_files.length) {
+              console.warn("Faltan CSV en raíz del proyecto:", data.missing_files);
+            }
+          } catch (err) {
+            console.error("Error cargando listas iniciales:", err);
+          }
+        }
+
+      function syncCustomToSelect(customInputId, selectId) {
+        const customInput = document.getElementById(customInputId);
+        const selectElem = document.getElementById(selectId);
+
+        if (!customInput || !selectElem) {
+          console.error("No se encontró uno de los elementos para sync", customInputId, selectId);
+          return;
+        }
+
+        const value = (customInput.value || "").trim();
+
+        // Borrar opción personalizada anterior
+        Array.from(selectElem.options).forEach((opt) => {
+          if (opt.dataset && opt.dataset.custom === "true") {
+            opt.remove();
+          }
+        });
+
+        if (value) {
+          const opt = document.createElement("option");
+          opt.value = value;
+          opt.textContent = value;
+          opt.dataset.custom = "true";
+          selectElem.appendChild(opt);
+          selectElem.value = value;
+        }
+      }
+
+      // Exponer funciones al HTML (onclick / oninput)
+      window.uploadDisciplineCSV = function () {
+        importSimpleList("disciplinas", "disciplines_file", "discipline_select");
+      };
+
+      window.uploadCategoryCSV = function () {
+        importSimpleList("categorias", "categories_file", "category_select");
+      };
+
+      window.uploadGenderCSV = function () {
+        importSimpleList("generos", "gender_file", "gender_select");
+      };
+
+      window.uploadModalityCSV = function () {
+        importSimpleList("modalidades", "modalities_file", "modality_select");
+      };
+
+      window.syncCustomDiscipline = function () {
+        syncCustomToSelect("discipline_custom", "discipline_select");
+      };
+
+      window.syncCustomCategory = function () {
+        syncCustomToSelect("category_custom", "category_select");
+      };
+
+      window.syncCustomGender = function () {
+        syncCustomToSelect("gender_custom", "gender_select");
+      };
+
+      window.syncCustomModality = function () {
+        syncCustomToSelect("modality_custom", "modality_select");
+      };
+      // ===============================
+      // UI DISPONIBILIDAD (DÍA x CANCHA)
+      // ===============================
+
+        function getDefaultWindowsFromGeneral(startTime, endTime) {
+          // Devuelve 1 o 2 ventanas según el corte general (Desde/Hasta).
+          // Si no hay corte válido, devuelve una sola ventana startTime..endTime.
+
+          const mbFromEl = document.getElementById("midday_break_from");
+          const mbToEl = document.getElementById("midday_break_to");
+          const legacyMbEl = document.getElementById("midday_break"); // compatibilidad
+
+          const mbFrom = (mbFromEl?.value || "").trim();
+          const mbTo = (mbToEl?.value || "").trim();
+
+          let cutFrom = "";
+          let cutTo = "";
+
+          if (mbFrom && mbTo) {
+            cutFrom = mbFrom;
+            cutTo = mbTo;
+          } else if (legacyMbEl && legacyMbEl.value && legacyMbEl.value.includes(",")) {
+            const parts = legacyMbEl.value.trim().split(",");
+            if (parts.length === 2) {
+              cutFrom = parts[0].trim();
+              cutTo = parts[1].trim();
+            }
+          }
+
+          // Si no hay corte, ventana única
+          if (!cutFrom || !cutTo) {
+            return [{ start: startTime, end: endTime }];
+          }
+
+          const s = hhmmToMin(startTime);
+          const e = hhmmToMin(endTime);
+          const a = hhmmToMin(cutFrom);
+          const b = hhmmToMin(cutTo);
+
+          // Validación básica: tiempos válidos y dentro del rango general
+          if (
+            !Number.isFinite(s) || !Number.isFinite(e) || !Number.isFinite(a) || !Number.isFinite(b) ||
+            !(s < e) || !(a < b) ||
+            a <= s || b >= e
+          ) {
+            // Si es inválido o no entra, NO cortamos (evita romper horarios)
+            return [{ start: startTime, end: endTime }];
+          }
+
+          // Ventanas resultantes: [start..cutFrom] y [cutTo..end]
+          return [
+            { start: startTime, end: cutFrom },
+            { start: cutTo, end: endTime },
+          ];
+        }
+
+
+      function ensureDayCourtConfig(dayIndex, courtNum, startTime, endTime) {
+        if (!courtAvailabilityByDay[dayIndex]) courtAvailabilityByDay[dayIndex] = { courts: {} };
+        if (!courtAvailabilityByDay[dayIndex].courts) courtAvailabilityByDay[dayIndex].courts = {};
+
+        if (!courtAvailabilityByDay[dayIndex].courts[courtNum]) {
+          courtAvailabilityByDay[dayIndex].courts[courtNum] = {
+            enabled: true,
+            windows: getDefaultWindowsFromGeneral(startTime, endTime)
+          };
+        } else {
+          // si existe pero no tiene ventanas, poné default
+          const c = courtAvailabilityByDay[dayIndex].courts[courtNum];
+          if (!Array.isArray(c.windows) || c.windows.length === 0) {
+            c.windows = getDefaultWindowsFromGeneral(startTime, endTime);
+          }
+          if (typeof c.enabled !== "boolean") c.enabled = true;
+        }
+      }
+
+      function normalizeAvailability(days, courts, startTime, endTime) {
+        // asegura que el día seleccionado tenga config para todas las canchas visibles
+        for (let d = 0; d < days; d++) {
+          // no obligamos a crear overrides para todos los días;
+          // solo crearemos cuando el usuario toque ese día/cancha
+          if (!courtAvailabilityByDay[d]) continue;
+          for (let c = 1; c <= courts; c++) {
+            if (!courtAvailabilityByDay[d].courts?.[c]) continue;
+            ensureDayCourtConfig(d, c, startTime, endTime);
+          }
+        }
+      }
+
+      function renderAvailabilityDayOptions(days) {
+        const sel = document.getElementById("availDaySelect");
+        sel.innerHTML = "";
+        for (let d = 0; d < days; d++) {
+          const opt = document.createElement("option");
+          opt.value = String(d);
+          opt.textContent = `Día ${d + 1}`;
+          sel.appendChild(opt);
+        }
+      }
+
+      function renderAvailabilityCourtsForDay(dayIndex, courts, startTime, endTime) {
+        const wrap = document.getElementById("availCourtsContainer");
+        wrap.innerHTML = "";
+
+        const dayCfg = courtAvailabilityByDay[dayIndex]?.courts || {};
+
+        for (let c = 1; c <= courts; c++) {
+          // Si no existe override, mostramos UI igual, pero basado en defaults (sin guardar hasta que cambien algo)
+          const cfg = dayCfg[c] ?? { enabled: true, windows: getDefaultWindowsFromGeneral(startTime, endTime) };
+
+          const row = document.createElement("div");
+          row.className = "court-card";
+          row.dataset.court = String(c);
+          row.dataset.day = String(dayIndex);
+          row.style.border = "1px solid #e0e0e0";
+          row.style.borderRadius = "8px";
+          row.style.padding = "10px";
+          row.style.marginBottom = "10px";
+
+          const header = document.createElement("div");
+          header.style.display = "flex";
+          header.style.gap = "12px";
+          header.style.alignItems = "center";
+          header.style.flexWrap = "wrap";
+
+          const title = document.createElement("strong");
+          title.textContent = `Cancha ${c}`;
+
+          const chk = document.createElement("input");
+          chk.type = "checkbox";
+          chk.checked = !!cfg.enabled;
+          chk.id = `avail_chk_${dayIndex}_${c}`;
+
+          const chkLabel = document.createElement("label");
+          chkLabel.className = "pill";
+          chkLabel.style.display = "flex";
+          chkLabel.style.alignItems = "center";
+          chkLabel.style.gap = "6px";
+          chkLabel.appendChild(chk);
+          chkLabel.appendChild(document.createTextNode("Disponible"));
+
+          const btnAddWindow = document.createElement("button");
+          btnAddWindow.type = "button";
+          btnAddWindow.className = "btn";
+          btnAddWindow.textContent = "+ Ventana";
+
+          header.appendChild(title);
+          header.appendChild(chkLabel);
+          header.appendChild(btnAddWindow);
+
+          const windowsWrap = document.createElement("div");
+          windowsWrap.className = "windows";
+          windowsWrap.id = `avail_windows_${dayIndex}_${c}`;
+          windowsWrap.style.marginTop = "10px";
+          windowsWrap.style.display = "flex";
+          windowsWrap.style.flexDirection = "column";
+          windowsWrap.style.gap = "8px";
+
+          function persistCfg(newCfg) {
+            // al primer cambio, creamos override real
+            if (!courtAvailabilityByDay[dayIndex]) courtAvailabilityByDay[dayIndex] = { courts: {} };
+            if (!courtAvailabilityByDay[dayIndex].courts) courtAvailabilityByDay[dayIndex].courts = {};
+            courtAvailabilityByDay[dayIndex].courts[c] = newCfg;
+          }
+
+          function renderWindows(newCfg) {
+            windowsWrap.innerHTML = "";
+
+            newCfg.windows.forEach((w, idx) => {
+              const line = document.createElement("div");
+              line.className = "window-line";
+              line.style.display = "flex";
+              line.style.gap = "8px";
+              line.style.alignItems = "center";
+              line.style.flexWrap = "wrap";
+
+              const start = document.createElement("input");
+              start.type = "time";
+              start.value = w.start;
+
+              const end = document.createElement("input");
+              end.type = "time";
+              end.value = w.end;
+
+              const btnDel = document.createElement("button");
+              btnDel.type = "button";
+              btnDel.textContent = "Eliminar";
+
+              const msg = document.createElement("span");
+              msg.className = "hint";
+              msg.textContent = "";
+
+              function validateAndPersist() {
+                newCfg.windows[idx].start = start.value;
+                newCfg.windows[idx].end = end.value;
+
+                const a = hhmmToMin(start.value);
+                const b = hhmmToMin(end.value);
+
+                if (Number.isFinite(a) && Number.isFinite(b) && a < b) {
+                  msg.classList.remove("error");
+                  msg.textContent = "";
+                } else {
+                  msg.classList.add("error");
+                  msg.textContent = "El inicio debe ser menor que el fin.";
+                }
+
+                persistCfg(newCfg);
+              }
+
+              start.addEventListener("change", validateAndPersist);
+              end.addEventListener("change", validateAndPersist);
+              btnDel.addEventListener("click", () => {
+                newCfg.windows.splice(idx, 1);
+                if (newCfg.windows.length === 0) newCfg.windows = getDefaultWindowsFromGeneral(startTime, endTime);
+                persistCfg(newCfg);
+                renderWindows(newCfg);
+              });
+
+              line.appendChild(document.createTextNode("Inicio:"));
+              line.appendChild(start);
+              line.appendChild(document.createTextNode("Fin:"));
+              line.appendChild(end);
+              line.appendChild(btnDel);
+              line.appendChild(msg);
+
+              // Validación visual al render inicial
+              const a0 = hhmmToMin(start.value);
+              const b0 = hhmmToMin(end.value);
+              if (!(Number.isFinite(a0) && Number.isFinite(b0) && a0 < b0)) {
+                msg.classList.add("error");
+                msg.textContent = "El inicio debe ser menor que el fin.";
+              }
+
+              windowsWrap.appendChild(line);
+            });
+          }
+
+          // eventos checkbox / add window
+          chk.addEventListener("change", () => {
+            const newCfg = {
+              enabled: chk.checked,
+              windows: Array.isArray(cfg.windows) && cfg.windows.length ? structuredClone(cfg.windows) : getDefaultWindowsFromGeneral(startTime, endTime)
+            };
+            persistCfg(newCfg);
+            cfg.enabled = newCfg.enabled;
+            cfg.windows = newCfg.windows;
+          });
+
+          btnAddWindow.addEventListener("click", () => {
+            const newCfg = {
+              enabled: !!chk.checked,
+              windows: Array.isArray(cfg.windows) && cfg.windows.length ? structuredClone(cfg.windows) : []
+            };
+            newCfg.windows.push({ start: startTime, end: endTime });
+            persistCfg(newCfg);
+            cfg.enabled = newCfg.enabled;
+            cfg.windows = newCfg.windows;
+            renderWindows(newCfg);
+          });
+
+          row.appendChild(header);
+          row.appendChild(windowsWrap);
+          wrap.appendChild(row);
+
+          // render inicial
+          renderWindows({
+            enabled: cfg.enabled,
+            windows: structuredClone(cfg.windows)
+          });
+        }
+      }
+
+      function setupAvailabilityPanel() {
+        const daySel = document.getElementById("availDaySelect");
+        const btnCopy = document.getElementById("btnCopyAvailToAllDays");
+        const btnClear = document.getElementById("btnClearAvailOverrides");
+
+        if (!daySel || !btnCopy || !btnClear) return; // si el panel no está en el HTML, no hace nada
+
+        function readGeneralInputs() {
+          const days = Number(document.getElementById("days")?.value || 1);
+          const courts = Number(document.getElementById("fields")?.value || 1);
+          const startTime = document.getElementById("start_time")?.value || "09:00";
+          const endTime = document.getElementById("end_time")?.value || "18:00";
+          return { days, courts, startTime, endTime };
+        }
+
+        let _lastDaysForAvail = null;
+
+        function rerender() {
+          const { days, courts, startTime, endTime } = readGeneralInputs();
+
+          // Guardar selección ANTES de tocar las opciones
+          const prevSelected = daySel.value || "0";
+
+          // Solo reconstruir el selector si cambió la cantidad de días
+          if (_lastDaysForAvail !== days) {
+            renderAvailabilityDayOptions(days);
+            _lastDaysForAvail = days;
+          }
+
+          // Restaurar selección si existe; si no, dejar en 0
+          const maxDayIndex = Math.max(0, days - 1);
+          const wanted = Math.min(Number(prevSelected), maxDayIndex);
+          daySel.value = String(wanted);
+
+          const dayIndex = Number(daySel.value || 0);
+          normalizeAvailability(days, courts, startTime, endTime);
+          renderAvailabilityCourtsForDay(dayIndex, courts, startTime, endTime);
+        }
+
+
+        daySel.addEventListener("change", rerender);
+
+        btnCopy.addEventListener("click", () => {
+          const { days } = readGeneralInputs();
+          const fromDay = Number(daySel.value || 0);
+          const src = courtAvailabilityByDay[fromDay]?.courts ? structuredClone(courtAvailabilityByDay[fromDay].courts) : null;
+          if (!src) return;
+
+          for (let d = 0; d < days; d++) {
+            courtAvailabilityByDay[d] = { courts: structuredClone(src) };
+          }
+          rerender();
+        });
+
+        btnClear.addEventListener("click", () => {
+          courtAvailabilityByDay = {};
+          rerender();
+        });
+
+        // Re-render cuando cambian días/canchas/horario general
+          ["days", "fields", "start_time", "end_time", "midday_break_from", "midday_break_to", "midday_break"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.addEventListener("change", rerender);
+        });
+
+        rerender();
+      }
+
+      // Llamar al iniciar la página
+      document.addEventListener("DOMContentLoaded", () => {
+        setupAvailabilityPanel();
+        renderDayDurationInputs();
+
+        const daysEl = document.getElementById("days");
+        const durEl = document.getElementById("match_duration");
+        if (daysEl) daysEl.addEventListener("change", renderDayDurationInputs);
+        if (durEl) durEl.addEventListener("change", renderDayDurationInputs);
+        const restEl = document.getElementById("rest_minutes");
+        if (restEl) restEl.addEventListener("change", renderDayDurationInputs);
+      });
+
+
+      // Cargar CSV para cualquier archivo
+      function handleFileLoad(buttonId, fileInputId, kind, selectId) {
+        const button = document.getElementById(buttonId);
+        const fileInput = document.getElementById(fileInputId);
+        const selectElem = document.getElementById(selectId);
+
+        button.addEventListener("click", async () => {
+          fileInput.click(); // Activa el input de archivo cuando se hace clic en el botón
+
+          fileInput.addEventListener("change", async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+              alert("Seleccione un archivo CSV primero.");
+              return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+              const res = await fetch(`${BASE_URL}/import_list/${kind}`, {
+                method: "POST",
+                body: formData,
+              });
+
+              if (!res.ok) {
+                let msg = `Error al importar ${kind}`;
+                try {
+                  const errData = await res.json();
+                  if (errData.error) msg = errData.error;
+                } catch (e) {}
+                alert(msg);
+                return;
+              }
+
+              const data = await res.json();
+              const items = data.items || [];
+
+              selectElem.innerHTML = '<option value="">(Elegir de la lista)</option>';
+              items.forEach((item) => {
+                const opt = document.createElement("option");
+                opt.value = item;
+                opt.textContent = item;
+                selectElem.appendChild(opt);
+              });
+
+              alert(`Se cargaron ${items.length} ítems para ${kind}.`);
+            } catch (err) {
+              console.error(err);
+              alert(`Error de red al importar ${kind}`);
+            }
+          });
+        });
+      }
+
+      // Llamamos la función para cada CSV
+      handleFileLoad("load-discipline", "disciplines_file", "disciplinas", "discipline_select");
+      handleFileLoad("load-category", "categories_file", "categorias", "category_select");
+      handleFileLoad("load-gender", "gender_file", "generos", "gender_select");
+      handleFileLoad("load-modality", "modalities_file", "modalidades", "modality_select");
+      
+        loadCompetitionListsOnStartup();
+
+
+
+      </script>
+
+  </body>
+</html>
 
