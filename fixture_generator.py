@@ -1746,7 +1746,12 @@ def generate_fixture(
 #  EXPORTACIÓN PDF (PARA /export_pdf)
 # ------------------------------------------------------------
 
-def export_to_pdf(schedule: List[Match], output_path: str, title: str = 'Fixture generado') -> None:
+def export_to_pdf(
+    schedule: List[Match],
+    output_path: str,
+    title: str = 'Fixture generado',
+    header_image_path: Optional[str] = None,
+) -> None:
     try:
         from fpdf import FPDF
     except ImportError as exc:
@@ -1755,6 +1760,14 @@ def export_to_pdf(schedule: List[Match], output_path: str, title: str = 'Fixture
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
+
+    if header_image_path:
+        try:
+            usable_w = pdf.w - 20
+            pdf.image(header_image_path, x=10, y=8, w=usable_w)
+            pdf.set_y(34)
+        except Exception:
+            pdf.set_y(10)
 
     pdf.set_font('Arial', 'B', 16)
     pdf.cell(0, 10, title, ln=True, align='C')
