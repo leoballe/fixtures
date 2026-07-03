@@ -280,6 +280,33 @@
       .hint { font-size: 0.8rem; color: #5a6a85; }
       .hint.error { color: #7a1c1c; font-weight: 700; }
 
+      /* Encabezado personalizado para exportaciones PDF/Excel */
+      .export-header-preview-box{
+        border:1px dashed #c7d3ea;
+        background:#ffffff;
+        border-radius:12px;
+        padding:10px;
+        display:flex;
+        gap:10px;
+        align-items:center;
+        flex-wrap:wrap;
+        margin-top:6px;
+      }
+      .export-header-preview-img{
+        width:min(360px, 100%);
+        max-height:60px;
+        object-fit:contain;
+        background:#ffffff;
+        border:1px solid #c7d3ea;
+        border-radius:8px;
+        padding:4px;
+      }
+      .export-header-preview-info{
+        flex:1;
+        min-width:180px;
+      }
+
+
       /* Duración por día */
       .day-duration-container{
         display:flex;
@@ -431,6 +458,22 @@
         </button>
 
         <span id="teams-file-name" class="hint"></span>
+      </div>
+
+      <div class="form-row">
+        <label>Encabezado exportación:</label>
+        <input id="export_header_file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" style="display:none" />
+        <button type="button" id="btn-load-export-header" class="btn">🖼️ Subir JPG/PNG</button>
+        <button type="button" id="btn-remove-export-header" class="btn btn-danger">Eliminar imagen</button>
+        <span class="hint">Máx. 1800 px de ancho × 150 px de alto y 150 dpi.</span>
+      </div>
+
+      <div id="export-header-preview-box" class="export-header-preview-box" style="display:none">
+        <img id="export-header-preview-img" class="export-header-preview-img" alt="Vista previa del encabezado">
+        <div class="export-header-preview-info">
+          <div><strong id="export-header-preview-name">Encabezado cargado</strong></div>
+          <div id="export-header-preview-details" class="hint"></div>
+        </div>
       </div>
 
       <div class="form-row">
@@ -696,6 +739,255 @@
 
 // El backend está en el mismo host
       const BASE_URL = "";
+
+        // =========================================================
+        // Encabezado personalizado para PDF y Excel
+        // - JPG/PNG
+        // - Máximo: 1800 px ancho, 150 px alto, 150 dpi
+        // - Se guarda localmente para reutilizarlo mientras trabajás
+        // =========================================================
+        const EXPORT_HEADER_STORAGE_KEY = "fixture_export_header_image_v1";
+        let currentExportHeaderImage = null;
+
+        function getCurrentExportHeaderImage() {
+          return currentExportHeaderImage && currentExportHeaderImage.dataUrl ? currentExportHeaderImage : null;
+        }
+
+        function saveExportHeaderImageToStorage() {
+          try {
+            if (currentExportHeaderImage) {
+              localStorage.setItem(EXPORT_HEADER_STORAGE_KEY, JSON.stringify(currentExportHeaderImage));
+            } else {
+              localStorage.removeItem(EXPORT_HEADER_STORAGE_KEY);
+            }
+          } catch (err) {
+            console.warn("No se pudo guardar el encabezado en localStorage:", err);
+            alert("La imagen es demasiado pesada para guardarla en este navegador. Probá con un JPG más liviano.");
+          }
+        }
+
+        function renderExportHeaderPreview() {
+          const box = document.getElementById("export-header-preview-box");
+          const img = document.getElementById("export-header-preview-img");
+          const nameEl = document.getElementById("export-header-preview-name");
+          const detailsEl = document.getElementById("export-header-preview-details");
+          const header = getCurrentExportHeaderImage();
+
+          if (!box || !img || !nameEl || !detailsEl) return;
+
+          if (!header) {
+            box.style.display = "none";
+            img.removeAttribute("src");
+            nameEl.textContent = "";
+            detailsEl.textContent = "";
+            return;
+          }
+
+          img.src = header.dataUrl;
+          nameEl.textContent = header.name || "Encabezado cargado";
+          const sizeText = header.width && header.height ? `${header.width} × ${header.height}px` : "";
+          const dpiText = header.dpi ? ` · ${Math.round(header.dpi)} dpi` : " · DPI no informado";
+          detailsEl.textContent = `${sizeText}${dpiText}`;
+          box.style.display = "flex";
+        }
+
+        function loadExportHeaderImageFromStorage() {
+          try {
+            const raw = localStorage.getItem(EXPORT_HEADER_STORAGE_KEY);
+            currentExportHeaderImage = raw ? JSON.parse(raw) : null;
+          } catch (err) {
+            currentExportHeaderImage = null;
+          }
+          renderExportHeaderPreview();
+        }
+
+        function removeExportHeaderImage() {
+          currentExportHeaderImage = null;
+          saveExportHeaderImageToStorage();
+          renderExportHeaderPreview();
+          const input = document.getElementById("export_header_file");
+          if (input) input.value = "";
+        }
+
+        function fileToDataUrl(file) {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        }
+
+        function loadImageDimensionsFromObjectUrl(url) {
+          return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+            img.onerror = reject;
+            img.src = url;
+          });
+        }
+
+        function parsePngDpi(bytes) {
+          const sig = [137,80,78,71,13,10,26,10];
+          if (!bytes || bytes.length < 33) return null;
+          for (let i = 0; i < sig.length; i++) if (bytes[i] !== sig[i]) return null;
+
+          let pos = 8;
+          while (pos + 12 <= bytes.length) {
+            const len = (bytes[pos] << 24) | (bytes[pos+1] << 16) | (bytes[pos+2] << 8) | bytes[pos+3];
+            const type = String.fromCharCode(bytes[pos+4], bytes[pos+5], bytes[pos+6], bytes[pos+7]);
+
+            if (type === "pHYs" && len >= 9 && pos + 17 <= bytes.length) {
+              const xppm = (bytes[pos+8] << 24) | (bytes[pos+9] << 16) | (bytes[pos+10] << 8) | bytes[pos+11];
+              const yppm = (bytes[pos+12] << 24) | (bytes[pos+13] << 16) | (bytes[pos+14] << 8) | bytes[pos+15];
+              const unit = bytes[pos+16];
+              if (unit === 1 && xppm > 0 && yppm > 0) return Math.max(xppm, yppm) * 0.0254;
+              return null;
+            }
+
+            pos += 12 + len;
+          }
+          return null;
+        }
+
+        function parseJpegDpi(bytes) {
+          if (!bytes || bytes.length < 20 || bytes[0] !== 0xFF || bytes[1] !== 0xD8) return null;
+
+          let pos = 2;
+          while (pos + 9 < bytes.length) {
+            if (bytes[pos] !== 0xFF) break;
+
+            const marker = bytes[pos + 1];
+            const len = (bytes[pos + 2] << 8) | bytes[pos + 3];
+
+            if (len < 2 || pos + 2 + len > bytes.length) break;
+
+            if (marker === 0xE0) {
+              const id = String.fromCharCode(bytes[pos+4], bytes[pos+5], bytes[pos+6], bytes[pos+7], bytes[pos+8]);
+              if (id === "JFIF\0") {
+                const unit = bytes[pos + 11];
+                const xden = (bytes[pos + 12] << 8) | bytes[pos + 13];
+                const yden = (bytes[pos + 14] << 8) | bytes[pos + 15];
+
+                if (xden > 0 && yden > 0) {
+                  if (unit === 1) return Math.max(xden, yden);
+                  if (unit === 2) return Math.max(xden, yden) * 2.54;
+                }
+              }
+            }
+
+            pos += 2 + len;
+          }
+
+          return null;
+        }
+
+        function parseImageDpiFromBuffer(file, buffer) {
+          const bytes = new Uint8Array(buffer || []);
+          const type = (file.type || "").toLowerCase();
+          if (type.includes("png") || /\.png$/i.test(file.name || "")) return parsePngDpi(bytes);
+          if (type.includes("jpeg") || /\.jpe?g$/i.test(file.name || "")) return parseJpegDpi(bytes);
+          return null;
+        }
+
+        async function handleExportHeaderFileChange(e) {
+          const input = e && e.target ? e.target : document.getElementById("export_header_file");
+          const file = input && input.files ? input.files[0] : null;
+          if (!file) return;
+
+          const type = (file.type || "").toLowerCase();
+          const validType = type === "image/png" || type === "image/jpeg" || /\.(png|jpe?g)$/i.test(file.name || "");
+          if (!validType) {
+            alert("El encabezado debe ser JPG o PNG.");
+            input.value = "";
+            return;
+          }
+
+          let buffer;
+          try {
+            buffer = await file.arrayBuffer();
+          } catch (err) {
+            alert("No se pudo leer el archivo.");
+            input.value = "";
+            return;
+          }
+
+          const objectUrl = URL.createObjectURL(file);
+          let dims;
+          try {
+            dims = await loadImageDimensionsFromObjectUrl(objectUrl);
+          } catch (err) {
+            URL.revokeObjectURL(objectUrl);
+            alert("No se pudo validar la imagen.");
+            input.value = "";
+            return;
+          }
+          URL.revokeObjectURL(objectUrl);
+
+          if (dims.width > 1800 || dims.height > 150) {
+            alert("El encabezado no puede superar 1800 px de ancho por 150 px de alto.");
+            input.value = "";
+            return;
+          }
+
+          const dpi = parseImageDpiFromBuffer(file, buffer);
+          if (dpi && dpi > 150.5) {
+            alert("El encabezado no puede superar 150 dpi.");
+            input.value = "";
+            return;
+          }
+
+          let dataUrl;
+          try {
+            dataUrl = await fileToDataUrl(file);
+          } catch (err) {
+            alert("No se pudo cargar la imagen.");
+            input.value = "";
+            return;
+          }
+
+          if (dataUrl.length > 900000) {
+            alert("La imagen es demasiado pesada para enviarla con la exportación. Probá con un JPG más liviano.");
+            input.value = "";
+            return;
+          }
+
+          currentExportHeaderImage = {
+            dataUrl,
+            name: file.name || "encabezado",
+            type: type || (dataUrl.indexOf("image/jpeg") >= 0 ? "image/jpeg" : "image/png"),
+            width: dims.width,
+            height: dims.height,
+            dpi: dpi ? Math.round(dpi) : null,
+            savedAt: new Date().toISOString()
+          };
+
+          saveExportHeaderImageToStorage();
+          renderExportHeaderPreview();
+          input.value = "";
+        }
+
+        function setupExportHeaderControls() {
+          const input = document.getElementById("export_header_file");
+          const loadBtn = document.getElementById("btn-load-export-header");
+          const removeBtn = document.getElementById("btn-remove-export-header");
+
+          if (loadBtn && input) {
+            loadBtn.addEventListener("click", () => input.click());
+          }
+
+          if (input) {
+            input.addEventListener("change", handleExportHeaderFileChange);
+          }
+
+          if (removeBtn) {
+            removeBtn.addEventListener("click", removeExportHeaderImage);
+          }
+
+          loadExportHeaderImageFromStorage();
+        }
+
+
 
         // =========================================================
         // Autocompletar Disciplina/Categoría/Género/Modalidad desde
@@ -2487,6 +2779,7 @@ const uploadBtn = document.getElementById("upload-btn");
             modalidad:
               (document.getElementById("modality_custom")?.value || "").trim() ||
               (document.getElementById("modality_select")?.value || "").trim(),
+            export_header_image: getCurrentExportHeaderImage(),
           };
         }
 
@@ -3127,6 +3420,7 @@ const uploadBtn = document.getElementById("upload-btn");
       document.addEventListener("DOMContentLoaded", () => {
         setupAvailabilityPanel();
         renderDayDurationInputs();
+        setupExportHeaderControls();
 
         const daysEl = document.getElementById("days");
         const durEl = document.getElementById("match_duration");
