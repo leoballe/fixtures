@@ -12,6 +12,9 @@ Rutas:
 import re
 import os
 import csv
+import base64
+import tempfile
+from io import BytesIO
 from flask import Flask, request, jsonify, send_file
 
 from fixture_generator import (
@@ -62,6 +65,98 @@ app = Flask(__name__, static_folder='templates', static_url_path='')
 
 loaded_teams: list[Team] = []
 current_schedule: list[Match] = []
+
+
+# ---------------- ENCABEZADO PERSONALIZADO DE EXPORTACIÓN ----------------
+
+def _cleanup_temp_file(path: str | None) -> None:
+    if not path:
+        return
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
+def _extract_export_header_image(meta: dict | None) -> str | None:
+    """
+    Extrae desde meta.export_header_image una imagen JPG/PNG en base64,
+    la valida y la guarda temporalmente para insertarla en PDF/Excel.
+
+    Restricciones:
+      - JPG o PNG
+      - máximo 1800 px de ancho
+      - máximo 150 px de alto
+      - máximo 150 dpi, si el archivo informa DPI
+    """
+    if not meta or not isinstance(meta, dict):
+        return None
+
+    header = meta.get('export_header_image') or {}
+    if not isinstance(header, dict):
+        return None
+
+    data_url = (header.get('dataUrl') or '').strip()
+    if not data_url:
+        return None
+
+    m = re.match(r'^data:image/(png|jpeg|jpg);base64,(.+)$', data_url, flags=re.IGNORECASE | re.DOTALL)
+    if not m:
+        raise ValueError('El encabezado debe ser una imagen JPG o PNG válida.')
+
+    ext_raw = (m.group(1) or '').lower()
+    ext = 'jpg' if ext_raw in ('jpeg', 'jpg') else 'png'
+    payload = re.sub(r'\s+', '', m.group(2) or '')
+
+    try:
+        raw = base64.b64decode(payload, validate=True)
+    except Exception as exc:
+        raise ValueError('No se pudo decodificar la imagen de encabezado.') from exc
+
+    if len(raw) > 2_500_000:
+        raise ValueError('La imagen de encabezado es demasiado pesada. Usá un JPG/PNG más liviano.')
+
+    # Validación real de dimensiones/DPI con Pillow cuando está disponible.
+    try:
+        from PIL import Image
+        img = Image.open(BytesIO(raw))
+        img.load()
+
+        fmt = (img.format or '').upper()
+        if fmt not in ('PNG', 'JPEG', 'JPG'):
+            raise ValueError('El encabezado debe ser JPG o PNG.')
+
+        width, height = img.size
+        if width > 1800 or height > 150:
+            raise ValueError('El encabezado no puede superar 1800 px de ancho por 150 px de alto.')
+
+        dpi_value = None
+        dpi_info = img.info.get('dpi')
+        if isinstance(dpi_info, (tuple, list)) and dpi_info:
+            try:
+                dpi_value = max(float(x) for x in dpi_info if x)
+            except Exception:
+                dpi_value = None
+        elif isinstance(dpi_info, (int, float)):
+            dpi_value = float(dpi_info)
+
+        if dpi_value and dpi_value > 150.5:
+            raise ValueError('El encabezado no puede superar 150 dpi.')
+
+        # Si el MIME decía JPG pero Pillow detectó PNG, respetamos lo detectado para evitar errores.
+        ext = 'png' if fmt == 'PNG' else 'jpg'
+    except ImportError:
+        # Si Pillow no está instalado, se mantiene la validación del frontend y del MIME base64.
+        pass
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}')
+    try:
+        tmp.write(raw)
+        return tmp.name
+    finally:
+        tmp.close()
+
 
 
 # ---------------- PÁGINA PRINCIPAL Y ESTÁTICOS ----------------
@@ -614,17 +709,32 @@ def generate():
 
 # ---------------- EXPORTACIÓN PDF AUTOMÁTICA ----------------
 
-@app.route('/export_pdf', methods=['GET'])
+@app.route('/export_pdf', methods=['GET', 'POST'])
 def export_pdf_route():
     global current_schedule
     if not current_schedule:
         return jsonify({'error': 'No hay un fixture generado.'}), 400
 
+    data = request.get_json(silent=True) if request.method == 'POST' else {}
+    meta = (data or {}).get('meta') or {}
+
+    try:
+        export_header_image_path = _extract_export_header_image(meta)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
     filename = request.args.get('filename', 'fixture.pdf')
     output_path = os.path.join('/tmp', filename)
     try:
-        export_to_pdf(current_schedule, output_path, title='Fixture generado automáticamente')
+        export_to_pdf(
+            current_schedule,
+            output_path,
+            title='Fixture generado automáticamente',
+            header_image_path=export_header_image_path,
+        )
+        _cleanup_temp_file(export_header_image_path)
     except Exception as exc:
+        _cleanup_temp_file(export_header_image_path)
         return jsonify({'error': f'Error al exportar PDF: {exc}'}), 500
 
     return send_file(output_path, as_attachment=True, download_name=filename)
@@ -652,6 +762,11 @@ def export_manual_pdf():
     categoria  = (meta.get('categoria')  or '').strip()
     genero     = (meta.get('genero')     or '').strip()
     modalidad  = (meta.get('modalidad')  or '').strip()
+
+    try:
+        export_header_image_path = _extract_export_header_image(meta)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
     try:
         from fpdf import FPDF
@@ -868,7 +983,7 @@ def export_manual_pdf():
     row_alt = (234, 244, 252)
 
     page_margin = 10
-    top_y = 32  # dejamos lugar para título + meta
+    top_y = 52 if export_header_image_path else 32  # deja lugar para encabezado + título + meta
     table_gap_x = 6
     table_gap_y = 8
 
@@ -891,6 +1006,14 @@ def export_manual_pdf():
 
     def add_page_with_title():
         pdf.add_page()
+
+        if export_header_image_path:
+            try:
+                pdf.image(export_header_image_path, x=page_margin, y=8, w=usable_w)
+                pdf.set_y(27)
+            except Exception:
+                pdf.set_y(8)
+
         # Título
         pdf.set_fill_color(*primary_blue)
         pdf.set_text_color(255, 255, 255)
@@ -1029,6 +1152,7 @@ def export_manual_pdf():
 
     output_path = os.path.join('/tmp', 'fixture_manual.pdf')
     pdf.output(output_path)
+    _cleanup_temp_file(export_header_image_path)
     return send_file(output_path, as_attachment=True, download_name='fixture_manual.pdf')
 @app.route('/export_manual_excel', methods=['POST'])
 def export_manual_excel():
@@ -1061,6 +1185,11 @@ def export_manual_excel():
         data = request.get_json(force=True) or {}
         schedule_data = data.get('schedule') or []
         meta = data.get('meta') or {}
+
+        try:
+            export_header_image_path = _extract_export_header_image(meta)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
 
         bye_matches_by_day = meta.get('bye_matches_by_day') or {}
 
@@ -1412,8 +1541,25 @@ def export_manual_excel():
             ws.cell(row=r, column=c1, value=value)
             return ws.cell(row=r, column=c1)
 
-        # (1) Título
+        # (0) Encabezado gráfico opcional
         row = 1
+        if export_header_image_path:
+            try:
+                from openpyxl.drawing.image import Image as XLImage
+                header_img = XLImage(export_header_image_path)
+                max_width_px = 980
+                max_height_px = 82
+                scale = min(max_width_px / float(header_img.width), max_height_px / float(header_img.height), 1.0)
+                header_img.width = int(header_img.width * scale)
+                header_img.height = int(header_img.height * scale)
+                ws.add_image(header_img, "A1")
+                ws.row_dimensions[row].height = 62
+                row += 2
+            except Exception:
+                # Si la imagen no puede insertarse en Excel, el archivo se genera igual sin encabezado.
+                pass
+
+        # (1) Título
         merge_and_set(row, 1, TOTAL_COLS, "Fixture - Juegos Nacionales", font=title_font, align=center, fill=fill_primary)
         row += 1
 
@@ -1540,6 +1686,7 @@ def export_manual_excel():
 
         out_path = os.path.join("/tmp", "fixture_manual.xlsx")
         wb.save(out_path)
+        _cleanup_temp_file(export_header_image_path)
 
         try:
             return send_file(out_path, as_attachment=True, download_name="fixture_manual.xlsx")
