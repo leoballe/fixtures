@@ -705,69 +705,170 @@
         // -> disciplina, categoria, genero, modalidad
         // Nota: si la disciplina trae "_" en el nombre, se conserva.
         // =========================================================
-        function parseMetaFromTeamsFilename(filename) {
-          if (!filename) return null;
+        function selectHasRealOptions(selectId) {
+          const selectElem = document.getElementById(selectId);
+          if (!selectElem) return false;
+          return Array.from(selectElem.options).some((opt) => {
+            const v = (opt.value || "").trim();
+            return v !== "" && !(opt.dataset && opt.dataset.custom === "true");
+          });
+        }
 
-          // Quitar extensión y separar por guiones bajos.
-          const base = filename.replace(/\.[^/.]+$/, "");
-          const partsRaw = base.split("_").map(p => p.trim()).filter(Boolean);
+        function selectHasMatchingOption(selectId, incomingValue) {
+          const selectElem = document.getElementById(selectId);
+          if (!selectElem) return false;
 
-          if (partsRaw.length < 3) return null;
+          const v = (incomingValue || "").trim();
+          if (!v) return false;
 
-          let parts = [...partsRaw];
+          return Array.from(selectElem.options).some((opt) => {
+            const optValue = (opt.value || "").trim();
+            const optText = (opt.textContent || "").trim();
+            if (!optValue && !optText) return false;
 
-          // Detectar fecha al final (YYYY-MM-DD) si existe.
-          const last = parts[parts.length - 1];
-          if (/^\d{4}-\d{2}-\d{2}$/.test(last)) {
-            parts.pop();
-          }
+            if (typeof valuesMatchForSelect === "function") {
+              return valuesMatchForSelect(selectId, optValue, v) || valuesMatchForSelect(selectId, optText, v);
+            }
 
-          // Detectar sistema al final y removerlo.
-          // Importante: algunos sistemas tienen "_" en el nombre (8x3_sembrado / 6x4_sembrado).
+            return optValue.toLowerCase() === v.toLowerCase() || optText.toLowerCase() === v.toLowerCase();
+          });
+        }
+
+        function stripDateFromFilenameBase(base) {
+          const dateMatch = String(base || "").match(/(?:-|_)(\d{4}-\d{2}-\d{2})$/);
+          if (!dateMatch) return String(base || "");
+          return String(base || "").slice(0, dateMatch.index);
+        }
+
+        function stripSystemFromParts(parts) {
+          const out = Array.isArray(parts) ? [...parts] : [];
+          if (!out.length) return out;
+
           const systemSuffixes = [
-            ["8x3", "sembrado"],
-            ["6x4", "sembrado"],
+            ["8x3_sembrado"],
+            ["6x4_sembrado"],
+            ["8x3", "sembrado"],       // compatibilidad con nombres viejos separados por "_"
+            ["6x4", "sembrado"],       // compatibilidad con nombres viejos separados por "_"
             ["8x3"],
             ["4x6"],
             ["rr"],
+            ["round_robin"],
+            ["orden_paso"],
           ];
 
           for (const suffix of systemSuffixes) {
-            if (parts.length < suffix.length) continue;
+            if (out.length < suffix.length) continue;
 
-            const tail = parts.slice(parts.length - suffix.length).map(p => p.toLowerCase());
-            const normalizedSuffix = suffix.map(p => p.toLowerCase());
+            const tail = out.slice(out.length - suffix.length).map(p => String(p || "").trim().toLowerCase());
+            const normalizedSuffix = suffix.map(p => String(p || "").trim().toLowerCase());
             const matches = tail.every((p, idx) => p === normalizedSuffix[idx]);
 
             if (matches) {
-              parts.splice(parts.length - suffix.length, suffix.length);
+              out.splice(out.length - suffix.length, suffix.length);
               break;
             }
           }
 
-          // Casos admitidos:
-          // 1) Disciplina_Categoria_Genero_Modalidad_sistema_fecha
-          //    Ej: BADMINTON_S15_Femenino_COMUNITARIO_8x3_2026-06-29.csv
-          // 2) Disciplina_Categoria_Modalidad_sistema_fecha
-          //    Ej: BADMINTON_S15_COMUNITARIO_4x6_2026-06-29.csv
-          //    En este caso no hay género en el nombre, entonces se autocompletan los 3 datos disponibles.
-          if (parts.length >= 4) {
-            const modality = parts.pop();
-            const gender = parts.pop();
-            const category = parts.pop();
-            const discipline = parts.join("_");
-            return { discipline, category, gender, modality };
-          }
-
-          if (parts.length === 3) {
-            const modality = parts.pop();
-            const category = parts.pop();
-            const discipline = parts.join("_");
-            return { discipline, category, gender: "", modality };
-          }
-
-          return null;
+          return out;
         }
+
+        function parseMetaPartsWithOptionalEvent(partsRaw) {
+          let parts = (partsRaw || []).map(p => String(p || "").trim()).filter(Boolean);
+          parts = stripSystemFromParts(parts);
+
+          if (parts.length < 3) return null;
+
+          // Nuevo criterio:
+          // - Si hay 5 o más parámetros útiles, el primero es nombre de evento y se omite.
+          //   Ej: Nombre_Evento-AGUAS_ABIERTAS-S12-Masculino-LIBRE
+          // - Si hay 4 parámetros, puede ser:
+          //   a) Disciplina-Categoría-Género-Modalidad
+          //   b) Evento-Disciplina-Categoría-Modalidad (sin género)
+          //   Para distinguirlo, se mira si el primer parámetro coincide con la lista de disciplinas.
+          let startIndex = 0;
+
+          const firstLooksLikeDiscipline = selectHasMatchingOption("discipline_select", parts[0]);
+          const disciplineListReady = selectHasRealOptions("discipline_select");
+
+          if (parts.length >= 5) {
+            startIndex = 1;
+          } else if (parts.length === 4) {
+            if (firstLooksLikeDiscipline) {
+              startIndex = 0;
+            } else if (disciplineListReady) {
+              startIndex = 1;
+            } else {
+              // Si la lista todavía no terminó de cargar, preferimos no omitir nada
+              // para no perder disciplina/categoría/género/modalidad.
+              startIndex = 0;
+            }
+          } else {
+            startIndex = 0;
+          }
+
+          const data = parts.slice(startIndex);
+          if (data.length < 3) return null;
+
+          const discipline = data[0] || "";
+          const category = data[1] || "";
+          let gender = "";
+          let modality = "";
+
+          if (data.length >= 4) {
+            gender = data[2] || "";
+            modality = data[3] || "";
+          } else if (data.length === 3) {
+            // Puede ser Categoría-Género o Categoría-Modalidad.
+            // Si el tercer parámetro coincide con la lista de géneros, lo tomamos como género.
+            // Si no, lo tomamos como modalidad.
+            const third = data[2] || "";
+            if (selectHasMatchingOption("gender_select", third)) {
+              gender = third;
+              modality = "";
+            } else {
+              gender = "";
+              modality = third;
+            }
+          }
+
+          return { discipline, category, gender, modality };
+        }
+
+        // =========================================================
+        // Autocompletar Disciplina/Categoría/Género/Modalidad desde
+        // el nombre del CSV de equipos.
+        //
+        // Nuevo formato recomendado:
+        //   Nombre_Evento-AGUAS_ABIERTAS-S12-Masculino-LIBRE-8x3-2026-07-03.csv
+        //   -> omite Nombre_Evento y toma:
+        //      Disciplina=AGUAS_ABIERTAS, Categoría=S12, Género=Masculino, Modalidad=LIBRE
+        //
+        // También admite:
+        //   AGUAS_ABIERTAS-S12-Masculino-LIBRE-8x3-2026-07-03.csv
+        //   -> toma el primer parámetro como disciplina si coincide con el desplegable.
+        //
+        // Mantiene compatibilidad con nombres viejos separados por "_".
+        // =========================================================
+        function parseMetaFromTeamsFilename(filename) {
+          if (!filename) return null;
+
+          const base = filename.replace(/\.[^/.]+$/, "");
+          const baseWithoutDate = stripDateFromFilenameBase(base);
+
+          // Formato nuevo: parámetros separados por guion medio.
+          // Los guiones de la fecha ya fueron removidos arriba.
+          if (baseWithoutDate.includes("-")) {
+            const dashParts = baseWithoutDate.split("-").map(p => p.trim()).filter(Boolean);
+            const meta = parseMetaPartsWithOptionalEvent(dashParts);
+            if (meta) return meta;
+          }
+
+          // Compatibilidad con formato anterior:
+          // Disciplina_Categoria_Genero_Modalidad_8x3_2026-06-29.csv
+          const underscoreParts = baseWithoutDate.split("_").map(p => p.trim()).filter(Boolean);
+          return parseMetaPartsWithOptionalEvent(underscoreParts);
+        }
+
 
         function _removePreviousCustomOption(selectElem) {
           Array.from(selectElem.options).forEach((opt) => {
@@ -781,6 +882,7 @@
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
             .replace(/\./g, "")
+            .replace(/[_-]+/g, " ")
             .replace(/\s+/g, " ")
             .toLowerCase();
         }
