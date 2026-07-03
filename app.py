@@ -79,6 +79,58 @@ def _cleanup_temp_file(path: str | None) -> None:
         pass
 
 
+def _safe_filename_part(value: object) -> str:
+    """
+    Convierte un parámetro de competencia en una parte segura de nombre de archivo.
+    - Espacios internos => guion bajo.
+    - Guiones medios internos => guion bajo, porque el guion medio separa parámetros.
+    - Quita acentos y caracteres no seguros.
+    """
+    import unicodedata
+
+    s = str(value or '').strip()
+    if not s:
+        return ''
+
+    try:
+        s = unicodedata.normalize('NFD', s)
+        s = ''.join(ch for ch in s if unicodedata.category(ch) != 'Mn')
+    except Exception:
+        pass
+
+    s = re.sub(r'\s+', '_', s)
+    s = s.replace('-', '_')
+    s = re.sub(r'[^A-Za-z0-9._]', '', s)
+    s = re.sub(r'_+', '_', s).strip('_.')
+    return s
+
+
+def _export_basename_from_meta(meta: dict | None) -> str:
+    """
+    Nombre base para PDF/Excel:
+      Disciplina-Categoría-Género-Modalidad-Sistema
+
+    Si algún dato falta, se omite para evitar dobles separadores.
+    """
+    meta = meta or {}
+    sistema = (
+        meta.get('sistema')
+        or meta.get('system')
+        or meta.get('sistema_competencia')
+        or ''
+    )
+
+    parts = [
+        _safe_filename_part(meta.get('disciplina')),
+        _safe_filename_part(meta.get('categoria')),
+        _safe_filename_part(meta.get('genero')),
+        _safe_filename_part(meta.get('modalidad')),
+        _safe_filename_part(sistema),
+    ]
+    parts = [p for p in parts if p]
+    return '-'.join(parts) if parts else 'fixture_manual'
+
+
 def _extract_export_header_image(meta: dict | None) -> str | None:
     """
     Extrae desde meta.export_header_image una imagen JPG/PNG en base64,
@@ -167,8 +219,8 @@ def _prepare_excel_header_image_path(src_path: str | None) -> str | None:
     Importante:
       - No inserta la imagen en una celda.
       - La imagen se verá en Diseño de página / Vista previa de impresión / impresión.
-      - Se redimensiona como máximo a 1500 x 150 px y se guarda a 150 dpi
-        para que entre correctamente en el ancho imprimible de una hoja A4 apaisada.
+      - Se redimensiona como máximo a 1100 x 150 px y se guarda a 150 dpi
+        para que entre correctamente en el ancho imprimible de una hoja A4 vertical.
     """
     if not src_path:
         return None
@@ -184,7 +236,7 @@ def _prepare_excel_header_image_path(src_path: str | None) -> str | None:
         img = Image.open(src_path)
         img.load()
 
-        max_width_px = 1500
+        max_width_px = 1100
         max_height_px = 150
 
         width, height = img.size
@@ -832,6 +884,7 @@ def export_manual_pdf():
     categoria  = (meta.get('categoria')  or '').strip()
     genero     = (meta.get('genero')     or '').strip()
     modalidad  = (meta.get('modalidad')  or '').strip()
+    sistema    = (meta.get('sistema') or meta.get('system') or '').strip()
 
     try:
         export_header_image_path = _extract_export_header_image(meta)
@@ -1098,6 +1151,7 @@ def export_manual_pdf():
             f"Categoría: {categoria}" if categoria else "",
             f"Género: {genero}" if genero else "",
             f"Modalidad: {modalidad}" if modalidad else "",
+            f"Sistema: {sistema}" if sistema else "",
         ] if x]
         if lineas:
             pdf.ln(2)
@@ -1220,10 +1274,11 @@ def export_manual_pdf():
 
             draw_day_table(day, by_day[day], x, y, box_h)
 
-    output_path = os.path.join('/tmp', 'fixture_manual.pdf')
+    export_basename = _export_basename_from_meta(meta)
+    output_path = os.path.join('/tmp', f'{export_basename}.pdf')
     pdf.output(output_path)
     _cleanup_temp_file(export_header_image_path)
-    return send_file(output_path, as_attachment=True, download_name='fixture_manual.pdf')
+    return send_file(output_path, as_attachment=True, download_name=f'{export_basename}.pdf')
 @app.route('/export_manual_excel', methods=['POST'])
 def export_manual_excel():
     """
@@ -1429,15 +1484,18 @@ def export_manual_excel():
                 "error": "Falta instalar XlsxWriter. Agregalo a requirements.txt y reinstalá dependencias."
             }), 500
 
-        out_path = os.path.join("/tmp", "fixture_manual.xlsx")
+        export_basename = _export_basename_from_meta(meta)
+        out_path = os.path.join("/tmp", f"{export_basename}.xlsx")
         workbook = xlsxwriter.Workbook(out_path)
         ws = workbook.add_worksheet("Fixture")
 
-        # Configuración de página e impresión
-        ws.set_landscape()
+        # Configuración de página e impresión:
+        # A4 vertical y ajustado a una sola página.
+        ws.set_portrait()
         ws.set_paper(9)  # A4
-        ws.fit_to_pages(1, 0)
+        ws.fit_to_pages(1, 1)
         ws.center_horizontally()
+        ws.center_vertically()
         ws.set_footer('&C&P de &N', {'margin': 0.25})
 
         if excel_header_image_path:
@@ -1517,12 +1575,14 @@ def export_manual_excel():
         categoria = _norm(meta.get("categoria"))
         genero = _norm(meta.get("genero"))
         modalidad = _norm(meta.get("modalidad"))
+        sistema = _norm(meta.get("sistema") or meta.get("system"))
 
         meta_parts = [x for x in [
             f"Disciplina: {disciplina}" if disciplina else "",
             f"Categoría: {categoria}" if categoria else "",
             f"Género: {genero}" if genero else "",
             f"Modalidad: {modalidad}" if modalidad else "",
+            f"Sistema: {sistema}" if sistema else "",
         ] if x]
         meta_line = " | ".join(meta_parts)
 
@@ -1627,9 +1687,9 @@ def export_manual_excel():
         _cleanup_temp_file(export_header_image_path)
 
         try:
-            return send_file(out_path, as_attachment=True, download_name="fixture_manual.xlsx")
+            return send_file(out_path, as_attachment=True, download_name=f"{export_basename}.xlsx")
         except TypeError:
-            return send_file(out_path, as_attachment=True, attachment_filename="fixture_manual.xlsx")
+            return send_file(out_path, as_attachment=True, attachment_filename=f"{export_basename}.xlsx")
 
     except Exception as exc:
         _cleanup_temp_file(excel_header_image_path if excel_header_image_path != export_header_image_path else None)
