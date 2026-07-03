@@ -159,6 +159,76 @@ def _extract_export_header_image(meta: dict | None) -> str | None:
 
 
 
+def _prepare_excel_header_image_path(src_path: str | None) -> str | None:
+    """
+    Prepara una copia temporal del encabezado para usarlo en el ENCABEZADO REAL
+    de la hoja de Excel mediante XlsxWriter.
+
+    Importante:
+      - No inserta la imagen en una celda.
+      - La imagen se verá en Diseño de página / Vista previa de impresión / impresión.
+      - Se redimensiona como máximo a 1500 x 150 px y se guarda a 150 dpi
+        para que entre correctamente en el ancho imprimible de una hoja A4 apaisada.
+    """
+    if not src_path:
+        return None
+
+    try:
+        from PIL import Image
+    except ImportError:
+        # Si Pillow no está instalado, se usa la imagen original.
+        # En requirements.txt se agrega Pillow para que esta preparación esté disponible.
+        return src_path
+
+    try:
+        img = Image.open(src_path)
+        img.load()
+
+        max_width_px = 1500
+        max_height_px = 150
+
+        width, height = img.size
+        if width <= 0 or height <= 0:
+            return src_path
+
+        scale = min(max_width_px / float(width), max_height_px / float(height), 1.0)
+        if scale < 1.0:
+            new_size = (
+                max(1, int(round(width * scale))),
+                max(1, int(round(height * scale))),
+            )
+            img = img.resize(new_size, Image.LANCZOS)
+
+        fmt = (img.format or '').upper()
+        if fmt not in ('PNG', 'JPEG', 'JPG'):
+            fmt = 'PNG'
+
+        suffix = '.png' if fmt == 'PNG' else '.jpg'
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmp_path = tmp.name
+        tmp.close()
+
+        if fmt == 'PNG':
+            img.save(tmp_path, format='PNG', dpi=(150, 150), optimize=True)
+        else:
+            # JPEG no soporta transparencia. Si hubiera canal alpha, lo aplanamos sobre blanco.
+            if img.mode in ('RGBA', 'LA') or ('transparency' in img.info):
+                bg = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                bg.paste(img, mask=img.getchannel('A'))
+                img = bg
+            else:
+                img = img.convert('RGB')
+            img.save(tmp_path, format='JPEG', dpi=(150, 150), quality=92, optimize=True)
+
+        return tmp_path
+    except Exception:
+        # Si por algún motivo falla la preparación, no bloqueamos el Excel.
+        return src_path
+
+
+
 # ---------------- PÁGINA PRINCIPAL Y ESTÁTICOS ----------------
 @app.route('/')
 def index_page():
@@ -1157,30 +1227,17 @@ def export_manual_pdf():
 @app.route('/export_manual_excel', methods=['POST'])
 def export_manual_excel():
     """
-    Exporta a Excel (.xlsx) el fixture MANUAL (lo que el usuario ubicó en la grilla),
-    con un formato muy similar al PDF:
-      - Bloques de 2 días por "fila" (Día 1 al lado de Día 2, luego Día 3 al lado de Día 4, etc.)
-      - Separación visual con 2 columnas vacías entre tablas
-      - Último día solo (si hay cantidad impar de días) queda en la tabla izquierda
-      - Incluye disciplina, categoría, género y modalidad
-      - NO incluye columna "Ronda"
-      - Partidos BYE/informativos salen SIEMPRE sin Hora y sin Cancha
+    Exporta a Excel (.xlsx) el fixture MANUAL.
 
-    Colores:
-      - Igual al PDF manual (título y "Día": azul; headers: celeste; filas alternadas; BYE gris)
-
-    Recibe:
-      {
-        "schedule": [...],
-        "meta": {
-          "disciplina": "...",
-          "categoria": "...",
-          "genero": "...",
-          "modalidad": "...",
-          "bye_matches_by_day": { "1":[...], "2":[...], ... }   # opcional
-        }
-      }
+    Cambio clave:
+      - El encabezado JPG/PNG se incorpora al ENCABEZADO REAL de la hoja
+        de Excel mediante XlsxWriter, no como imagen pegada en la fila 1.
+      - La imagen se ve en Diseño de página, Vista previa de impresión,
+        impresión o exportación a PDF desde Excel/LibreOffice.
     """
+    export_header_image_path = None
+    excel_header_image_path = None
+
     try:
         data = request.get_json(force=True) or {}
         schedule_data = data.get('schedule') or []
@@ -1188,6 +1245,7 @@ def export_manual_excel():
 
         try:
             export_header_image_path = _extract_export_header_image(meta)
+            excel_header_image_path = _prepare_excel_header_image_path(export_header_image_path)
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
 
@@ -1210,182 +1268,84 @@ def export_manual_excel():
             if h.upper() == 'BYE' or a.upper() == 'BYE':
                 return True
             return False
+
         def _split_compound_home(home: str, away: str, zone: str):
-                """
-                Si llega todo junto en home como: "PP29 vs BYE - Zona LLAVE C"
-                separa en columnas (home, away, zone). Si no matchea, deja igual.
-                """
-                h = _norm(home)
-                a = _norm(away)
-                z = _norm(zone)
+            """
+            Si llega todo junto en home como:
+              "PP29 vs BYE - Zona LLAVE C"
+            separa en columnas home / away / zone.
+            """
+            h = _norm(home)
+            a = _norm(away)
+            z = _norm(zone)
 
-                if h and (not a) and (" vs " in h.lower()) and ("zona" in h.lower()):
-                    mm = re.match(r"^\s*(.*?)\s+vs\s+(.*?)\s*[-–]\s*Zona\s*(.*?)\s*$", h, flags=re.IGNORECASE)
-                    if mm:
-                        h2 = (mm.group(1) or "").strip()
-                        a2 = (mm.group(2) or "").strip()
-                        z2 = (mm.group(3) or "").strip()
-                        if (not z) and z2:
-                            z = z2
-                        h = h2
-                        a = a2
+            if h and (not a) and (" vs " in h.lower()) and ("zona" in h.lower()):
+                mm = re.match(r"^\s*(.*?)\s+vs\s+(.*?)\s*[-–]\s*Zona\s*(.*?)\s*$", h, flags=re.IGNORECASE)
+                if mm:
+                    h2 = (mm.group(1) or "").strip()
+                    a2 = (mm.group(2) or "").strip()
+                    z2 = (mm.group(3) or "").strip()
+                    if (not z) and z2:
+                        z = z2
+                    h = h2
+                    a = a2
 
-                return h, a, z
-
-        def _strip_zone_prefix(text: str, zone_text: str) -> str:
-                """
-                Si text viene como: "23º ... PP41" y zone_text="23º",
-                devuelve "PP41" (sin el puesto ni separadores).
-                """
-                t = _norm(text)
-                zt = _norm(zone_text)
-                if not t or not zt:
-                    return t
-
-                if t.startswith(zt):
-                    rest = t[len(zt):].strip()
-                    rest = re.sub(r"^[\s\.\u2026\-–:]+", "", rest).strip()
-                    return rest
-
-                return t
-
-        def _normalize_position_row(zone: str, home: str, away: str):
-                """
-                Regla: si zone es tipo "23º", el "23º" NO puede aparecer en home/away.
-                Además, si queda un solo texto (PPxx) y el otro está vacío, lo dejamos en Local.
-                """
-                z = _norm(zone)
-                h = _norm(home)
-                a = _norm(away)
-
-                # Si zone vacío pero home/away es "23º ... PP41" => extraer zone
-                if (not z) and (h or a):
-                    candidate = h or a
-                    mm = re.match(r"^\s*(\d+º)\s*[\s\.\u2026\-–:]+(.*?)\s*$", candidate)
-                    if mm:
-                        z = (mm.group(1) or "").strip()
-                        remainder = (mm.group(2) or "").strip()
-                        if h:
-                            h = remainder
-                        else:
-                            a = remainder
-
-                if z and ("º" in z):
-                    h = _strip_zone_prefix(h, z)
-                    a = _strip_zone_prefix(a, z)
-
-                    # Si quedó PPxx en Visitante y Local vacío, pasarlo a Local
-                    if (not h) and a and a.upper() != "BYE":
-                        h = a
-                        a = ""
-
-                return z, h, a
-
-        import re
+            return h, a, z
 
         def _strip_position_prefix(text: str, position: str) -> str:
-                """
-                Si text viene como "23º ... PP41" y position="23º" => devuelve "PP41"
-                """
-                t = _norm(text)
-                p = _norm(position)
-                if not t or not p:
-                    return t
-
-                m = re.match(rf"^\s*{re.escape(p)}\s*[\s\.\u2026\-–:]+(.*)$", t)
-                if m:
-                    return (m.group(1) or "").strip()
-                return t
-
-        def _normalize_position_row(zone: str, home: str, away: str):
-                """
-                Regla: si zone es tipo "23º", ese "23º" NO debe aparecer en home/away.
-                En informativos típicos, dejamos:
-                  zone = "23º"
-                  home = "PPxx"
-                  away = ""
-                """
-                z = _norm(zone)
-                h = _norm(home)
-                a = _norm(away)
-
-                # Si zone viene vacío pero home/away es "23º ... PP41" => extraer zone
-                if not z:
-                    candidate = h or a
-                    mm = re.match(r"^\s*(\d+º)\s*[\s\.\u2026\-–:]+(.*)$", candidate)
-                    if mm:
-                        z = (mm.group(1) or "").strip()
-                        remainder = (mm.group(2) or "").strip()
-                        if h:
-                            h = remainder
-                        else:
-                            a = remainder
-
-                # Si zone es un puesto, limpiar prefijo en home/away
-                if z and ("º" in z):
-                    h = _strip_position_prefix(h, z)
-                    a = _strip_position_prefix(a, z)
-
-                    # Caso típico BYE/informativo: home vacío y away=PPxx => mover PPxx a home
-                    if a and (not h or h.upper() == "BYE" or h == z):
-                        h = a
-                        a = ""
-
-                return z, h, a
-
-        def _strip_zone_prefix(text: str, zone_text: str) -> str:
             """
-            Si text viene como: "23º ... PP41" y zone_text="23º",
-            devuelve "PP41" (sin el puesto ni separadores).
+            Si text viene como "23º ... PP41" y position="23º",
+            devuelve "PP41".
             """
             t = _norm(text)
-            zt = _norm(zone_text)
-            if not t or not zt:
+            p = _norm(position)
+            if not t or not p:
                 return t
 
-            if t.startswith(zt):
-                rest = t[len(zt):].strip()
-                # sacar separadores típicos: "…", "...", "-", "–", ":" y espacios/puntos
-                rest = re.sub(r"^[\s\.\u2026\-–:]+", "", rest).strip()
-                return rest
-
+            m = re.match(rf"^\s*{re.escape(p)}\s*[\s\.\u2026\-–:]+(.*)$", t)
+            if m:
+                return (m.group(1) or "").strip()
             return t
 
         def _normalize_position_row(zone: str, home: str, away: str):
             """
-            Regla: si zone es tipo "23º", el "23º" NO puede aparecer en home/away.
-            - Zone queda igual.
-            - Home/Away se limpian si venían con "23º ... XXX".
+            Si zone es tipo "23º", ese "23º" no debe repetirse en Local/Visitante.
+            En informativos típicos, dejamos:
+              zone = "23º"
+              home = "PPxx"
+              away = ""
             """
             z = _norm(zone)
             h = _norm(home)
             a = _norm(away)
 
-            # Caso: el puesto vino metido en home o away y zone está vacío -> extraerlo
-            if (not z) and (h or a):
+            if not z:
                 candidate = h or a
-                mm = re.match(r"^\s*(\d+º)\s*[\.\u2026\-–:]+\s*(.*?)\s*$", candidate)
+                mm = re.match(r"^\s*(\d+º)\s*[\s\.\u2026\-–:]+(.*)$", candidate)
                 if mm:
-                    z = mm.group(1).strip()
+                    z = (mm.group(1) or "").strip()
                     remainder = (mm.group(2) or "").strip()
                     if h:
                         h = remainder
                     else:
                         a = remainder
 
-            # Si zone es un puesto ("23º"), limpiar home/away si lo contienen
             if z and ("º" in z):
-                h = _strip_zone_prefix(h, z)
-                a = _strip_zone_prefix(a, z)
+                h = _strip_position_prefix(h, z)
+                a = _strip_position_prefix(a, z)
+
+                if a and (not h or h.upper() == "BYE" or h == z):
+                    h = a
+                    a = ""
 
             return z, h, a
 
         # -------------------------
-        # Agrupar por día + forzar BYE sin hora/cancha
+        # Agrupar por día + forzar BYE/informativos sin hora/cancha
         # -------------------------
         by_day = {}
 
-        # 1) Partidos colocados en la grilla
+        # 1) Partidos ubicados en la grilla
         for m in schedule_data:
             d = _safe_int(m.get('day'), default=0)
             n = _safe_int(m.get('number'))
@@ -1395,18 +1355,7 @@ def export_manual_excel():
             h = _norm(m.get('home'))
             a = _norm(m.get('away'))
 
-                # Normalizar casos raros: "A vs B - Zona X" y "23º ... PP41"
             h, a, z = _split_compound_home(h, a, z)
-            # Si llega todo junto: "PP29 vs BYE - Zona LLAVE C" => separar en columnas
-            if h and (not a) and (" vs " in h.lower()) and ("zona" in h.lower()):
-                mm = re.match(r"^\s*(.*?)\s+vs\s+(.*?)\s*[-–]\s*Zona\s*(.*?)\s*$", h, flags=re.IGNORECASE)
-                if mm:
-                    h = (mm.group(1) or "").strip()
-                    a = (mm.group(2) or "").strip()
-                    z2 = (mm.group(3) or "").strip()
-                    if (not z) and z2:
-                        z = z2
-
             z, h, a = _normalize_position_row(z, h, a)
 
             bye_flag = _is_bye_match(h, a)
@@ -1425,8 +1374,7 @@ def export_manual_excel():
                 "_is_bye": bye_flag,
             })
 
-        # 2) BYE/informativos en las áreas BYE por día (si el frontend los manda)
-        #    Evitar duplicados por número
+        # 2) BYE/informativos arrastrados al área BYE por día
         for day_str, arr in (bye_matches_by_day or {}).items():
             d = _safe_int(day_str, default=0)
             if not isinstance(arr, list):
@@ -1439,36 +1387,31 @@ def export_manual_excel():
                 if n is not None and n in existing_nums:
                     continue
 
-                # Tomar datos del item BYE
-                home = _norm(bm.get("home"))
-                away = _norm(bm.get("away"))
-                zone = _norm(bm.get("zone"))
+                h = _norm(bm.get("home"))
+                a = _norm(bm.get("away"))
+                z = _norm(bm.get("zone"))
 
-                # Normalizar casos raros: "A vs B - Zona X" y "23º ... PP41"
-                home, away, zone = _split_compound_home(home, away, zone)
-                zone, home, away = _normalize_position_row(zone, home, away)
+                h, a, z = _split_compound_home(h, a, z)
+                z, h, a = _normalize_position_row(z, h, a)
 
                 by_day.setdefault(d, []).append({
                     "day": d,
                     "number": n,
-                    "time": "",     # sin horario
-                    "field": "",    # sin cancha
-                    "home": home,
-                    "away": away,
-                    "zone": zone,
+                    "time": "",
+                    "field": "",
+                    "home": h,
+                    "away": a,
+                    "zone": z,
                     "_is_bye": True,
                 })
-
 
                 if n is not None:
                     existing_nums.add(n)
 
-        # Si no hay días válidos
         days_sorted = sorted([d for d in by_day.keys() if d and d > 0])
         if not days_sorted:
             return jsonify({"error": "No hay partidos para exportar."}), 400
 
-        # Ordenar por número de partido dentro de cada día (igual que el PDF)
         def _num_key(m):
             n = m.get("number")
             return (n is None, n if n is not None else 10**9)
@@ -1477,175 +1420,188 @@ def export_manual_excel():
             by_day[d] = sorted(by_day[d], key=_num_key)
 
         # -------------------------
-        # Crear Excel con formato tipo PDF
+        # Crear Excel con XlsxWriter
         # -------------------------
-        from openpyxl import Workbook
-        from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
-        from openpyxl.utils import get_column_letter
+        try:
+            import xlsxwriter
+        except ImportError:
+            return jsonify({
+                "error": "Falta instalar XlsxWriter. Agregalo a requirements.txt y reinstalá dependencias."
+            }), 500
 
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Fixture"
+        out_path = os.path.join("/tmp", "fixture_manual.xlsx")
+        workbook = xlsxwriter.Workbook(out_path)
+        ws = workbook.add_worksheet("Fixture")
+
+        # Configuración de página e impresión
+        ws.set_landscape()
+        ws.set_paper(9)  # A4
+        ws.fit_to_pages(1, 0)
+        ws.center_horizontally()
+        ws.set_footer('&C&P de &N', {'margin': 0.25})
+
+        if excel_header_image_path:
+            # &G usa la imagen en el encabezado real de Excel.
+            # No se inserta como objeto dentro de la hoja.
+            ws.set_header(
+                '&C&G',
+                {
+                    'image_center': excel_header_image_path,
+                    'margin': 0.12,
+                    'align_with_margins': True,
+                    'scale_with_doc': True,
+                }
+            )
+            # Margen superior amplio para que el contenido no se superponga con el encabezado.
+            ws.set_margins(left=0.25, right=0.25, top=1.15, bottom=0.45)
+        else:
+            ws.set_margins(left=0.25, right=0.25, top=0.45, bottom=0.45)
 
         # Layout:
         # Tabla izquierda: 6 columnas (A-F)
         # Separación: 2 columnas vacías (G-H)
         # Tabla derecha: 6 columnas (I-N)
-        LEFT_START = 1          # A
+        LEFT_START = 0
         LEFT_COLS = 6
         GAP_COLS = 2
-        RIGHT_START = LEFT_START + LEFT_COLS + GAP_COLS  # I (9)
+        RIGHT_START = LEFT_START + LEFT_COLS + GAP_COLS
         RIGHT_COLS = 6
-        TOTAL_COLS = LEFT_COLS + GAP_COLS + RIGHT_COLS   # 14 (A..N)
+        TOTAL_COLS = LEFT_COLS + GAP_COLS + RIGHT_COLS
 
-        # Paleta (igual al PDF manual)
-        PRIMARY_BLUE = "FF005CAD"  # (0, 92, 173)
-        HEADER_CELESTE = "FFB9D9EB" # (185, 217, 235)
-        ROW_ALT = "FFEAF4FC"       # (234, 244, 252)
-        BYE_GRAY = "FFF0F0F0"      # (240, 240, 240)
+        # Formatos
+        primary_blue = '#005CAD'
+        header_celeste = '#B9D9EB'
+        row_alt = '#EAF4FC'
+        bye_gray = '#F0F0F0'
 
-        fill_primary = PatternFill("solid", fgColor=PRIMARY_BLUE)
-        fill_header = PatternFill("solid", fgColor=HEADER_CELESTE)
-        fill_alt = PatternFill("solid", fgColor=ROW_ALT)
-        fill_bye = PatternFill("solid", fgColor=BYE_GRAY)
+        fmt_title = workbook.add_format({
+            'bold': True, 'font_size': 14, 'font_color': '#FFFFFF',
+            'bg_color': primary_blue, 'align': 'center', 'valign': 'vcenter'
+        })
+        fmt_meta = workbook.add_format({
+            'italic': True, 'font_size': 10, 'align': 'center', 'valign': 'vcenter'
+        })
+        fmt_day = workbook.add_format({
+            'bold': True, 'font_size': 12, 'font_color': '#FFFFFF',
+            'bg_color': primary_blue, 'align': 'center', 'valign': 'vcenter',
+            'border': 1
+        })
+        fmt_header = workbook.add_format({
+            'bold': True, 'bg_color': header_celeste, 'align': 'center',
+            'valign': 'vcenter', 'border': 1
+        })
+        fmt_cell = workbook.add_format({
+            'align': 'center', 'valign': 'vcenter', 'border': 1, 'text_wrap': True
+        })
+        fmt_alt = workbook.add_format({
+            'align': 'center', 'valign': 'vcenter', 'border': 1,
+            'text_wrap': True, 'bg_color': row_alt
+        })
+        fmt_bye = workbook.add_format({
+            'align': 'center', 'valign': 'vcenter', 'border': 1,
+            'text_wrap': True, 'bg_color': bye_gray
+        })
+        fmt_blank = workbook.add_format({
+            'align': 'center', 'valign': 'vcenter', 'border': 1
+        })
 
-        # Estilos
-        title_font = Font(bold=True, size=14, color="FFFFFFFF")
-        meta_font = Font(italic=True, size=10)
-        day_font = Font(bold=True, size=12, color="FFFFFFFF")
-        header_font = Font(bold=True)
+        row = 0
 
-        center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-        thin = Side(style="thin")
-        border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-        def set_cell(r, c, value, font=None, align=None, use_border=False, fill=None):
-            cell = ws.cell(row=r, column=c, value=value)
-            if font:
-                cell.font = font
-            if align:
-                cell.alignment = align
-            if use_border:
-                cell.border = border
-            if fill:
-                cell.fill = fill
-            return cell
-
-        def merge_and_set(r, c1, c2, value, font=None, align=None, fill=None, use_border=False):
-            ws.merge_cells(start_row=r, start_column=c1, end_row=r, end_column=c2)
-            # aplicar estilo en todas las celdas del merge para que el color "pinte" todo el ancho
-            for c in range(c1, c2 + 1):
-                set_cell(r, c, None, font=font, align=align, use_border=use_border, fill=fill)
-            # valor solo en la primera celda del merge
-            ws.cell(row=r, column=c1, value=value)
-            return ws.cell(row=r, column=c1)
-
-        # (0) Encabezado gráfico opcional
-        row = 1
-        if export_header_image_path:
-            try:
-                from openpyxl.drawing.image import Image as XLImage
-                header_img = XLImage(export_header_image_path)
-                max_width_px = 980
-                max_height_px = 82
-                scale = min(max_width_px / float(header_img.width), max_height_px / float(header_img.height), 1.0)
-                header_img.width = int(header_img.width * scale)
-                header_img.height = int(header_img.height * scale)
-                ws.add_image(header_img, "A1")
-                ws.row_dimensions[row].height = 62
-                row += 2
-            except Exception:
-                # Si la imagen no puede insertarse en Excel, el archivo se genera igual sin encabezado.
-                pass
-
-        # (1) Título
-        merge_and_set(row, 1, TOTAL_COLS, "Fixture - Juegos Nacionales", font=title_font, align=center, fill=fill_primary)
+        # Título y metadatos dentro de la hoja.
+        # El encabezado gráfico va en el header real de impresión.
+        ws.merge_range(row, 0, row, TOTAL_COLS - 1, "Fixture - Juegos Nacionales", fmt_title)
+        ws.set_row(row, 22)
         row += 1
 
-        # (2) Meta
         disciplina = _norm(meta.get("disciplina"))
         categoria = _norm(meta.get("categoria"))
         genero = _norm(meta.get("genero"))
         modalidad = _norm(meta.get("modalidad"))
 
-        meta_line = f"Disciplina: {disciplina} | Categoría: {categoria} | Género: {genero} | Modalidad: {modalidad}"
-        merge_and_set(row, 1, TOTAL_COLS, meta_line, font=meta_font, align=center)
-        row += 2  # deja una línea en blanco
+        meta_parts = [x for x in [
+            f"Disciplina: {disciplina}" if disciplina else "",
+            f"Categoría: {categoria}" if categoria else "",
+            f"Género: {genero}" if genero else "",
+            f"Modalidad: {modalidad}" if modalidad else "",
+        ] if x]
+        meta_line = " | ".join(meta_parts)
 
-        # Headers (con Zona después de Cancha)
+        ws.merge_range(row, 0, row, TOTAL_COLS - 1, meta_line, fmt_meta)
+        ws.set_row(row, 20)
+        row += 2
+
         headers = ["Nº", "Hora", "Cancha", "Zona", "Local", "Visitante"]
+
+        def write_empty_block_row(r, start_col):
+            for j in range(LEFT_COLS):
+                ws.write(r, start_col + j, "", fmt_blank)
+
+        def write_match(r, start_col, m, is_alt_row: bool):
+            home = str(m.get("home") or "").strip()
+            away = str(m.get("away") or "").strip()
+
+            is_bye = (
+                bool(m.get("_is_bye"))
+                or home == ""
+                or away == ""
+                or home.upper() == "BYE"
+                or away.upper() == "BYE"
+            )
+
+            time = "" if is_bye else (m.get("time") or "")
+            field = "" if is_bye else (m.get("field") or "")
+
+            row_fmt = fmt_bye if is_bye else (fmt_alt if is_alt_row else fmt_cell)
+
+            vals = [
+                m.get("number"),
+                time,
+                field,
+                m.get("zone") or "",
+                home,
+                away,
+            ]
+
+            for i, v in enumerate(vals):
+                ws.write(r, start_col + i, v, row_fmt)
 
         def write_day_block(day_left, day_right):
             nonlocal row
 
-            # fila: Día X / Día Y (azul)
-            merge_and_set(row, LEFT_START, LEFT_START + LEFT_COLS - 1, f"Día {day_left}", font=day_font, align=center, fill=fill_primary, use_border=True)
+            ws.merge_range(row, LEFT_START, row, LEFT_START + LEFT_COLS - 1, f"Día {day_left}", fmt_day)
             if day_right is not None:
-                merge_and_set(row, RIGHT_START, RIGHT_START + RIGHT_COLS - 1, f"Día {day_right}", font=day_font, align=center, fill=fill_primary, use_border=True)
+                ws.merge_range(row, RIGHT_START, row, RIGHT_START + RIGHT_COLS - 1, f"Día {day_right}", fmt_day)
             row += 1
 
-            # fila: headers (celeste)
             for i, h in enumerate(headers):
-                set_cell(row, LEFT_START + i, h, font=header_font, align=center, use_border=True, fill=fill_header)
+                ws.write(row, LEFT_START + i, h, fmt_header)
             if day_right is not None:
                 for i, h in enumerate(headers):
-                    set_cell(row, RIGHT_START + i, h, font=header_font, align=center, use_border=True, fill=fill_header)
+                    ws.write(row, RIGHT_START + i, h, fmt_header)
             row += 1
 
             left_list = by_day.get(day_left, [])
             right_list = by_day.get(day_right, []) if day_right is not None else []
-
             max_len = max(len(left_list), len(right_list), 1)
 
-            def write_match(r, start_col, m, is_alt_row: bool):
-                home = str(m.get("home") or "").strip()
-                away = str(m.get("away") or "").strip()
-
-                # ✅ Regla general: si falta un equipo o hay BYE => tratar como BYE/informativo
-                is_bye = bool(m.get("_is_bye")) or (home == "" or away == "") or (home.upper() == "BYE" or away.upper() == "BYE")
-
-                # ✅ BYE / informativo SIEMPRE sin hora ni cancha
-                time = "" if is_bye else (m.get("time") or "")
-                field = "" if is_bye else (m.get("field") or "")
-
-                row_fill = fill_bye if is_bye else (fill_alt if is_alt_row else None)
-
-                vals = [
-                    m.get("number"),
-                    time,
-                    field,
-                    m.get("zone") or "",
-                    home,
-                    away,
-                ]
-                for i, v in enumerate(vals):
-                    set_cell(r, start_col + i, v, align=center, use_border=True, fill=row_fill)
-
-
             for i in range(max_len):
-                is_alt = (i % 2 == 1)  # como en el PDF (filas alternadas)
+                is_alt = (i % 2 == 1)
 
-                # izquierda
                 if i < len(left_list):
                     write_match(row, LEFT_START, left_list[i], is_alt)
                 else:
-                    for j in range(LEFT_COLS):
-                        set_cell(row, LEFT_START + j, "", align=center, use_border=True)
+                    write_empty_block_row(row, LEFT_START)
 
-                # derecha
                 if day_right is not None:
                     if i < len(right_list):
                         write_match(row, RIGHT_START, right_list[i], is_alt)
                     else:
-                        for j in range(RIGHT_COLS):
-                            set_cell(row, RIGHT_START + j, "", align=center, use_border=True)
+                        write_empty_block_row(row, RIGHT_START)
 
                 row += 1
 
-            row += 1  # línea en blanco entre bloques
+            row += 1
 
-        # Escribir de a pares: (1-2), (3-4), (5-6)...
         i = 0
         while i < len(days_sorted):
             d1 = days_sorted[i]
@@ -1653,39 +1609,21 @@ def export_manual_excel():
             write_day_block(d1, d2)
             i += 2
 
-        # Congelar encabezados
-        ws.freeze_panes = ws["A4"]
+        # Anchos de columnas
+        widths = [6, 9, 9, 14, 24, 24, 3, 3, 6, 9, 9, 14, 24, 24]
+        for col, width in enumerate(widths):
+            ws.set_column(col, col, width)
 
-        # -------------------------
-        # Auto-ajustar anchos por contenido (sin tocar las 2 columnas de gap)
-        # -------------------------
-        # (Evitar que el título/meta expandan todo: ignoramos filas 1-2)
-        MIN_W = 4
-        MAX_W = 40
+        # Alturas y congelado
+        for r in range(3, row):
+            ws.set_row(r, 18)
+        ws.freeze_panes(3, 0)
+        ws.repeat_rows(0, 1)
 
-        def _cell_len(v):
-            if v is None:
-                return 0
-            s = str(v)
-            return len(s)
+        workbook.close()
 
-        start_row_for_width = 4
-        for col in range(1, TOTAL_COLS + 1):
-            # Gap columnas (G-H) fijas
-            if col in (LEFT_START + LEFT_COLS, LEFT_START + LEFT_COLS + 1):
-                ws.column_dimensions[get_column_letter(col)].width = 3
-                continue
-
-            max_len = 0
-            for r in range(start_row_for_width, ws.max_row + 1):
-                max_len = max(max_len, _cell_len(ws.cell(row=r, column=col).value))
-
-            # un poquito más para respirar
-            w = max(MIN_W, min(MAX_W, max_len + 2))
-            ws.column_dimensions[get_column_letter(col)].width = w
-
-        out_path = os.path.join("/tmp", "fixture_manual.xlsx")
-        wb.save(out_path)
+        # XlsxWriter necesita la imagen hasta cerrar el workbook.
+        _cleanup_temp_file(excel_header_image_path if excel_header_image_path != export_header_image_path else None)
         _cleanup_temp_file(export_header_image_path)
 
         try:
@@ -1694,7 +1632,11 @@ def export_manual_excel():
             return send_file(out_path, as_attachment=True, attachment_filename="fixture_manual.xlsx")
 
     except Exception as exc:
+        _cleanup_temp_file(excel_header_image_path if excel_header_image_path != export_header_image_path else None)
+        _cleanup_temp_file(export_header_image_path)
         return jsonify({'error': f'Error exportando a Excel: {exc}'}), 400
+
+
 
 if __name__ == '__main__':
     # En Replit: puerto 5000, sin reloader para no duplicar procesos
