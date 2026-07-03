@@ -895,7 +895,7 @@ def export_manual_pdf():
         pdf.set_fill_color(*primary_blue)
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Arial", "B", 16)
-        pdf.cell(0, 10, "Fixture - Juegos Nacionales Evita", ln=True, align="C", fill=True)
+        pdf.cell(0, 10, "Fixture - Juegos Nacionales", ln=True, align="C", fill=True)
 
         # Meta debajo del título
         pdf.set_text_color(0, 0, 0)
@@ -1414,7 +1414,7 @@ def export_manual_excel():
 
         # (1) Título
         row = 1
-        merge_and_set(row, 1, TOTAL_COLS, "Fixture - Juegos Nacionales Evita", font=title_font, align=center, fill=fill_primary)
+        merge_and_set(row, 1, TOTAL_COLS, "Fixture - Juegos Nacionales", font=title_font, align=center, fill=fill_primary)
         row += 1
 
         # (2) Meta
