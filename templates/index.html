@@ -2779,6 +2779,8 @@ const uploadBtn = document.getElementById("upload-btn");
             modalidad:
               (document.getElementById("modality_custom")?.value || "").trim() ||
               (document.getElementById("modality_select")?.value || "").trim(),
+            sistema:
+              (document.getElementById("system")?.value || "").trim(),
             export_header_image: getCurrentExportHeaderImage(),
           };
         }
@@ -2819,12 +2821,53 @@ const uploadBtn = document.getElementById("upload-btn");
           return byeByDay;
         }
 
-        async function downloadFile(endpoint, filename) {
+        function safeExportFilenamePart(value) {
+          if (!value) return "";
+          let s = String(value);
+          try {
+            s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          } catch (e) {}
+          s = s.trim().replace(/\s+/g, "_");
+          // El guion medio se reserva para separar parámetros.
+          s = s.replace(/-/g, "_");
+          s = s.replace(/[^a-zA-Z0-9._]/g, "");
+          s = s.replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+          return s;
+        }
+
+        function buildExportDownloadFilename(ext, meta) {
+          const parts = [
+            safeExportFilenamePart(meta?.disciplina || ""),
+            safeExportFilenamePart(meta?.categoria || ""),
+            safeExportFilenamePart(meta?.genero || ""),
+            safeExportFilenamePart(meta?.modalidad || ""),
+            safeExportFilenamePart(meta?.sistema || ""),
+          ].filter(Boolean);
+
+          const base = parts.length ? parts.join("-") : "fixture_manual";
+          const cleanExt = String(ext || "").replace(/^\./, "") || "pdf";
+          return `${base}.${cleanExt}`;
+        }
+
+        function filenameFromContentDisposition(headerValue) {
+          const header = String(headerValue || "");
+          if (!header) return "";
+          const utf8 = header.match(/filename\*=UTF-8''([^;]+)/i);
+          if (utf8 && utf8[1]) {
+            try { return decodeURIComponent(utf8[1].replace(/"/g, "")); } catch (e) {}
+          }
+          const ascii = header.match(/filename="?([^";]+)"?/i);
+          return ascii && ascii[1] ? ascii[1].trim() : "";
+        }
+
+        async function downloadFile(endpoint, ext) {
           const schedule = collectScheduleFromGrid();
           if (!schedule) return;
 
           const meta = collectMeta();
           meta.bye_matches_by_day = collectByeByDay();
+
+          const fallbackFilename = buildExportDownloadFilename(ext, meta);
 
           const res = await fetch(`${BASE_URL}${endpoint}`, {
             method: "POST",
@@ -2842,7 +2885,7 @@ const uploadBtn = document.getElementById("upload-btn");
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = filename;
+          a.download = filenameFromContentDisposition(res.headers.get("Content-Disposition")) || fallbackFilename;
           document.body.appendChild(a);
           a.click();
           a.remove();
@@ -2856,7 +2899,7 @@ const uploadBtn = document.getElementById("upload-btn");
           exportBtn.disabled = true;
 
           try {
-            await downloadFile("/export_manual_pdf", "fixture_manual.pdf");
+            await downloadFile("/export_manual_pdf", "pdf");
           } catch (err) {
             console.error(err);
             alert("Error de red al solicitar el PDF.");
@@ -2873,7 +2916,7 @@ const uploadBtn = document.getElementById("upload-btn");
           exportExcelBtn.disabled = true;
 
           try {
-            await downloadFile("/export_manual_excel", "fixture_manual.xlsx");
+            await downloadFile("/export_manual_excel", "xlsx");
           } catch (err) {
             console.error(err);
             alert("Error de red al solicitar el Excel.");
